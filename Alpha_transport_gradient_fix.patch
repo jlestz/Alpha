@@ -1,0 +1,35 @@
+--- Alpha_transport.f90.orig	2026-09-01 18:16:44.056614844 +0000
++++ Alpha_transport.f90	2026-09-01 18:32:12.457081208 +0000
+@@ -499,9 +499,13 @@
+ !special BC 
+     n_alpha_tran_rho(n_rho_grid) = delta1*n_alpha_rho(n_rho_grid)
+ 
++!  compact forward difference (i, i+1) -- matches the stencil used for
++!  the in-loop (relaxed) gradient calculation below, so 'Initial' and
++!  'Relaxed' gradient outputs remain a fair, apples-to-apples comparison
++!  rather than being computed with two different numerical schemes.
+    rg_n_alpha_tran_rho(1) = 0.
+   do i = 2,n_rho_grid-1
+-    rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i+1)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
++    rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i+1)-n_alpha_tran_rho(i))/rmin/(rho_hat(i+1)-rho_hat(i))
+   enddo
+    i=n_rho_grid
+     rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i)-rho_hat(i-1))
+@@ -1258,9 +1262,16 @@
+ 
+ 
+ !compute n_alpha_tran_rho gradient
++!  compact forward difference (i, i+1) -- matches the adjacent-point reach
++!  of the density-update recursion (which combines D(i)+D(i+1) and
++!  flux(i)+flux(i+1)), unlike the original (i+1)-(i-1) centered stencil,
++!  which skips i entirely and is only weakly coupled to it through the
++!  density update -- the mismatch in reach between the two stencils is
++!  what let a sustained, slowly-relaxing grid-to-grid pattern persist.
++!  NOTE: this trades the original stencil's 2nd-order accuracy for 1st-order.
+    rg_n_alpha_tran_rho(1) = 0.
+   do i = 2,n_rho_grid-1
+-    rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i+1)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
++    rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i+1)-n_alpha_tran_rho(i))/rmin/(rho_hat(i+1)-rho_hat(i))
+   enddo
+    i=n_rho_grid
+     rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i)-rho_hat(i-1))

@@ -1,0 +1,2191 @@
+!!---------------------------------------------------------
+! Alpha_transport.f90
+!
+! PURPOSE:
+!  compute marginal stability transported alpha slowing down profiles
+!
+!---------------------------------------------------------
+
+subroutine Alpha_transport
+
+    use Alpha_use_input      
+
+    use Alpha_use_output     
+   
+    use Alpha_use_other      
+
+    use expro
+
+  !--------------------------------------
+  implicit none
+
+     integer :: i_tot_TAE   !3.09.16
+
+     integer :: i
+
+     integer :: ii
+
+     integer :: i_dn_up
+     integer :: n_up_loop
+     integer :: n_thdip
+!2A 
+     integer :: n_thdip2
+     integer :: i_bkg_Angioni
+     real :: Angi_Pinch_fac
+     real :: Angi_exp
+     integer :: Angi_negative
+
+     real :: beta_peaker
+
+     integer :: i_He_tran
+
+     integer :: i_threshold
+!2A  
+     integer :: i_threshold2
+
+     real :: pi
+     real :: delta0
+     real :: rdelta0
+     real :: delta1
+     real :: D_bkg
+     real :: D_TAE
+     real :: dr
+     real, dimension(n_rho_grid) :: dr_rho
+     real :: lag_rhs
+     real :: exp_rhs
+     real :: imp_rhs
+     real :: SDsink
+     real :: error
+     real :: error_f
+     real :: error_check
+     real :: error_rho_max
+     real :: relax
+     real :: relax_f
+     real :: thfrac
+     real :: thdip
+!2A
+     real :: error2
+     real :: thfrac2 
+     real :: thdip2
+
+     real :: Q_fus
+
+     real :: sd_renorm
+
+     real :: pinch_check
+     
+     real, dimension(n_rho_grid) :: rho_hat_p
+     real, dimension(n_rho_grid) :: V_prime_rho
+     real, dimension(n_rho_grid) :: rg_n_alpha_rho
+     real, dimension(n_rho_grid) :: n_alpha_tran_rho
+     real, dimension(n_rho_grid) :: n_alpha_tran_0_rho
+     real, dimension(n_rho_grid) :: n_alpha_tran_p_rho
+     real, dimension(n_rho_grid,100) :: n_alpha_tran_accum_rho
+     real, dimension(n_rho_grid) :: D_alpha
+     real, dimension(n_rho_grid) :: D_alpha_p
+     real, dimension(n_rho_grid) :: rg_n_alpha_th_rho
+     real, dimension(n_rho_grid) :: rg_n_alpha_tran_rho
+     real, dimension(n_rho_grid) :: rg_n_alpha_tran_p_rho
+     real, dimension(n_rho_grid) :: flux_rho
+     real, dimension(n_rho_grid) :: flux_rho_1_final
+     real, dimension(n_rho_grid) :: flux_p_rho
+     real, dimension(n_rho_grid) :: flux_0_rho
+     real, dimension(n_rho_grid) :: error_rho
+     real, dimension(n_rho_grid) :: error_f_rho
+     real, dimension(n_rho_grid) :: flux_source_rho
+     real, dimension(n_rho_grid) :: renormed_flux_source_rho
+     real, dimension(n_rho_grid) :: chi_eff
+     real, dimension(n_rho_grid) :: D_bkg_Angioni
+     real, dimension(n_rho_grid) :: C_p_alpha
+
+     real, dimension(n_rho_grid) :: p_alpha_rho
+     real, dimension(n_rho_grid) :: p_alpha_tran_rho
+     real, dimension(n_rho_grid) :: rg_p_alpha_rho
+     real, dimension(n_rho_grid) :: rg_p_alpha_th_rho
+     real, dimension(n_rho_grid) :: rg_p_alpha_tran_rho
+     real, dimension(n_rho_grid) :: rg_p_alpha_fac_rho
+
+!2A
+     real, dimension(n_rho_grid) :: rg_n_alpha2_rho
+     real, dimension(n_rho_grid) :: n_alpha2_tran_rho
+     real, dimension(n_rho_grid) :: n_alpha2_tran_p_rho
+     real, dimension(n_rho_grid) :: D_alpha2
+     real, dimension(n_rho_grid) :: rg_n_alpha2_th_rho
+     real, dimension(n_rho_grid) :: rg_n_alpha2_tran_rho
+     real, dimension(n_rho_grid) :: rg_n_alpha2_tran_p_rho
+     real, dimension(n_rho_grid) :: flux2_rho
+     real, dimension(n_rho_grid) :: error2_rho
+     real, dimension(n_rho_grid) :: flux2_source_rho
+     real, dimension(n_rho_grid) :: renormed_flux2_source_rho
+     real, dimension(n_rho_grid) :: D_bkg_Angioni2
+     real, dimension(n_rho_grid) :: C_p_alpha2
+
+     real, dimension(n_rho_grid) :: p_alpha2_rho
+     real, dimension(n_rho_grid) :: p_alpha2_tran_rho
+     real, dimension(n_rho_grid) :: rg_p_alpha2_rho
+     real, dimension(n_rho_grid) :: rg_p_alpha2_th_rho
+     real, dimension(n_rho_grid) :: rg_p_alpha2_tran_rho
+     real, dimension(n_rho_grid) :: rg_p_alpha2_fac_rho
+
+     real, dimension(n_rho_grid) :: p_alpha_tot_rho
+     real, dimension(n_rho_grid) :: p_alpha_tot_tran_rho
+     real, dimension(n_rho_grid) :: rg_p_alpha_tot_rho
+     real, dimension(n_rho_grid) :: rg_p_alpha_tot_th_rho
+     real, dimension(n_rho_grid) :: rg_p_alpha_tot_tran_rho
+
+     real, dimension(n_rho_grid) :: flow_factor
+     real, dimension(n_rho_grid) :: power_factor
+     !2A
+
+!8.22.13 add He ash transport
+     real, dimension(n_rho_grid) :: D_bkg_Angioni_He
+     real, dimension(n_rho_grid) :: C_p_He
+     real, dimension(n_rho_grid) :: n_He_tran_rho
+     real, dimension(n_rho_grid) :: n_He_tran_p_rho
+     real, dimension(n_rho_grid) :: rg_n_He_tran_rho
+     real, dimension(n_rho_grid) :: rg_n_He_tran_p_rho
+     real, dimension(n_rho_grid) :: D_He
+
+     real, dimension(n_rho_grid) :: S_peaker
+     
+     real, dimension(n_rho_grid) :: net_of_sink
+     real, dimension(n_rho_grid) :: net_of_sink2
+
+     real, dimension(n_rho_grid) :: D_bkg_read
+     real, dimension(n_rho_grid) :: QL_ratio_bkg_read
+
+     real, dimension(n_rho_grid) :: d2pdr2_crit_f
+     real, dimension(n_rho_grid) :: d2pdr2_crit_b
+     real, dimension(n_rho_grid) :: x_smooth_check
+
+     logical :: l_pinch_update
+     logical :: l_read_D_bkg
+
+     integer :: adapt_D_TAE_flag
+     real :: x_switch
+     integer :: nr
+
+     integer :: l_crit_smooth
+  !
+  character(len=80) :: comment
+  !--------------------------------------
+
+  l_pinch_update = .false.
+  if (D_bkg_file .ne. 'null') then
+    l_read_D_bkg = .true.
+  else
+    l_read_D_bkg = .false.
+  endif
+!  adapt_D_TAE_flag = 1
+  adapt_D_TAE_flag = 0
+  x_switch = 0.0
+
+  l_crit_smooth = 1
+!  l_crit_smooth = 0
+
+!   i_tot_TAE = 1 !3.09.16
+!   i_tot_TAE =  -1 ! 11.22.16 TGLF test  self-only
+!  i_tot_TAE =  1 ! 11.22.16 TGLF test  joint AE drive
+!  i_tot_TAE = -1 !self only check 11.14.17
+  if (l_coupled .eq. 1) then
+    i_tot_TAE = 1
+  else
+    i_tot_TAE = -1
+  endif
+! JBL DEBUG ONLY 
+    i_tot_TAE = 0
+
+!  delta0 = 0.1
+!  delta0 = 0.05
+!  delta0 = 0.01
+   delta0 = 0.2
+   delta0 = 0.1
+   delta0 = 0.01  !default
+  rdelta0= 0.5 
+
+!   delta1= 1. !default
+   delta1= 0.      !better physical choice.  Seems clear delta1 must be less than 1.
+!   delta1= 1. ! 9.03.13
+!   delta1= 2.
+!    delta1=1.
+
+   thfrac=0.5 !default
+   thdip=0.0  !default
+
+!   thfrac=0.3
+   thdip=5.
+   n_thdip = 2 !default
+   
+
+!  D_bkg = 0.3 !m**2/sec
+!  D_bkg = 0.1
+!  D_bkg = 0.03
+!  D_bkg = 0.015 !default
+!  D_bkg = 0.05
+  D_bkg = 0.001
+!  D_bkg = 0.045
+!  D_bkg = 0.005
+!!  D_bkg = 0.001 !no convegence with D_TAE=1.
+
+!  D_TAE = 1.0  !m**2/sec   !set scale of stiff critical gradient transport
+!   D_TAE = 0.1
+!!  D_TAE = 1.0 !default
+!  D_TAE = 0.3  !much better convergence
+!!  D_TAE = 0.0   !9.23.13
+!    D_TAE = 1.0   !10.02.13    D_TAE = 3.0
+!    D_TAE = 3.0
+    D_TAE = 7.4
+!     D_TAE = 1.0
+!    D_TAE = 20.
+!    D_TAE = 10.
+!!    D_TAE = 0.
+
+!    D_TAE = 1.0 !Q20 alpha recover
+!    D_TAE = 0.3
+!    D_TAE = 3.0
+!    D_TAE = 5.0  ! Test with higher stiffness
+!    D_TAE = 0.01
+!    D_TAE = 0.00001
+  SDsink = 1.0  ! 0.0=off  1.0=on
+  
+  i_dn_up = 0   ! 1=down  0=up
+!  n_up_loop = 50 !number of loops
+!  n_up_loop = 300 !default
+!  n_up_loop = 1000
+!  n_up_loop = 5000
+  n_up_loop = 10000
+!  relax = 0.10
+!  relax = 0.05 !default
+  relax = 0.0005
+!  relax = 0.001
+  relax_f = 0.005
+
+  Q_fus = 10.  !default
+!!!  Q_fus = 20.  !for the 2x baseline case
+!!!  Q_fus = 20.   !Q=20 recover
+    if(NBI_flag .eq. 1)      Q_fus = 1000000.  !for  DIIID NBI test with effective E_alpha
+
+   sd_renorm = 1.0 !default 
+
+!   sd_renorm = 1.078 !F
+!   sd_renorm = 0.94  !E
+!   sd_renorm = 0.93  !D2
+!   sd_renorm = 1.00  !B
+  
+!  i_bkg_Angioni = 0 !default      ! Turn Angioni model on/off
+!  i_bkg_Angioni = 1
+  i_bkg_Angioni = l_Angioni_flag
+
+  Angi_Pinch_fac = 1.0 ! default
+!  Angi_Pinch_fac = 1.5  !added 9.23.13 
+!  Angi_Pinch_fac = 1.8
+!  Angi_Pinch_fac = 1.9  !2.0 get inf's
+!  Angi_Pinch_fac = 0.0
+!9.18.14  error fix
+  Angi_exp = 1.0   !correct    +1.0  !incorrect used in NF  BW2014 ITER paper
+  Angi_negative = 1
+!  Angi_negative = 0
+
+  i_He_tran =2 
+  
+!  i_threshold = 0 ! default 0; !test model for rg_n_alpha_th_rho  
+!  i_threshold = 1 !  Kinsey F_n=1.1, F_T = 1.3, F_ei=1.1   q(.5) ~ 2 s_hat(.5) ~ 1
+!  i_threshold  = 2 !  ""  Maxwellian
+
+!  i_threshold = 3  ! sd 5x fixed Kinsey
+!   i_threshold = 4  ! Max 5x fixed Kinsey
+
+!   i_threshold = 5  ! sd 5x fixed Kinsey  2X  double drive
+!   i_threshold = 6  ! Max 5x fixed Kinsey  2X  double drive
+
+!    i_threshold =7    ! Max 5x fixed Kinsey  2X  hi-res
+    i_threshold = 10 !  TGLF 2014ITER critical density profile read
+
+!    if(NBI_flag .eq. 1) i_threshold = 8   !DIIID caseD  NBI  iso_max
+!   if(NBI_flag .eq. 1) i_threshold = 9   !DIIID caseD  NBI  SD-beam-like  ! EMB commented out 10-16-2018
+
+ 
+! rho_hat grid
+
+  print *, 'n_alpha_rho(1) at start of Alpha_transport', n_alpha_rho(1)
+
+  beta_peaker = 0.  ! default:  broader S0(r) and n_alpha_slowing_down
+  
+!!  beta_peaker = 0.5
+
+  if (l_read_D_bkg) then
+    i_bkg_Angioni = 1
+    open (unit=3,file=D_bkg_file,status='old')
+!    read (3,*) comment
+    do i = 1, n_rho_grid
+      read (3,*) D_bkg_read(i)  !, QL_ratio_bkg_read(i)
+    enddo
+    close (unit=3)
+  endif
+
+  if(NBI_flag .eq. 1 ) then
+   S0_rho(:) = sd_renorm*S0_rho(:)
+   n_alpha_rho(:) = sd_renorm*n_alpha_rho(:)
+  endif
+
+
+!  print *, 'in Alpha_transpot', rho_hat(1:10)
+!  rho_hat(1) = 0.
+!  do i = 1,n_rho_grid
+!   rho_hat(i) = float(i-1)/float(n_rho_grid-1)
+!  enddo
+
+  dr = rmin/float(n_rho_grid-1)
+  do i = 1, n_rho_grid-1
+   dr_rho(i) = rmin_rho(i+1) - rmin_rho(i)
+  enddo
+  dr_rho(n_rho_grid) = dr_rho(n_rho_grid-1)
+
+  rho_hat_p(:) = rho_hat(:)
+
+!set V_prime_rho(i) 
+!since  V' enters as 1/V' d[V' D dn/dr]/dr  size of V' or accuracy of V' not vey important
+
+  pi = 3.141592565
+
+  do i= 1,n_rho_grid
+   V_prime_rho(i) = 2.*pi*kappa_rho(i)*rmin_rho(i)*2.*pi*Rmaj_rho(i) !in m**2
+  enddo 
+
+!2A  start alpha setup 
+
+!9.23.13 China  or 9.22.13 10PM SD
+  S_peaker(:) =1.0
+ if(beta_peaker .gt. 0.0 .or. beta_peaker .lt. 0.0) then
+
+  do i= 1,n_rho_grid
+   S_peaker(i)=S0_rho(i)/S0_rho(25)
+  enddo
+
+  do  i= 1,n_rho_grid
+   S0_rho(i) = S0_rho(i)/S_peaker(i)**beta_peaker
+   n_alpha_rho(i)=n_alpha_rho(i)/S_peaker(i)**beta_peaker
+  enddo
+
+ endif
+
+!compute radial gradient of alpha slowing down density 
+
+    rg_n_alpha_rho(1) = 0. 
+  do i = 2,n_rho_grid-1
+    rg_n_alpha_rho(i)= -(n_alpha_rho(i+1)-n_alpha_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
+  enddo
+   i=n_rho_grid
+    rg_n_alpha_rho(i)= -(n_alpha_rho(i)-n_alpha_rho(i-1))/rmin/(rho_hat(i)-rho_hat(i-1))
+
+!test set-up
+
+!test model for rg_n_alpha_th_rho
+  do i = 1,n_rho_grid
+    rg_n_alpha_th_rho(i) = thfrac*rg_n_alpha_rho(25)*(1.+thdip*(rho_hat(i)-rho_hat(25))**n_thdip)
+  enddo
+
+  if (i_threshold .eq. 1) then
+  do i = 1,n_rho_grid
+   if(rho_hat(i) .ge. 0.50) &
+    rg_n_alpha_th_rho(i) = 0.0368856*(1.0+(rho_hat(i)-0.50)**2/(0.00503771)**2)
+   if(rho_hat(i) .lt. 0.50) &
+    rg_n_alpha_th_rho(i) = 0.0368856*(1.0+(rho_hat(i)-0.50)**2/(0.13734)**2)
+  enddo
+  endif
+  if (i_threshold .eq. 2) then
+  do i = 1,n_rho_grid
+   if(rho_hat(i) .ge. 0.50) &
+    rg_n_alpha_th_rho(i) = 0.03*(1.0+(rho_hat(i)-0.90)**2/(1.0)**2)
+   if(rho_hat(i) .lt. 0.90) &
+    rg_n_alpha_th_rho(i) = 0.03*(1.0+(rho_hat(i)-0.90)**2/(0.405)**2)
+  enddo
+  endif
+  if (i_threshold .eq. 3) then
+  do i = 1,n_rho_grid
+   if(rho_hat(i) .ge. 0.50) &
+    rg_n_alpha_th_rho(i) = 0.007*(1.0+(rho_hat(i)-0.50)**2/(0.06619)**2)
+   if(rho_hat(i) .lt. 0.50) &
+    rg_n_alpha_th_rho(i) = 0.007*(1.0+(rho_hat(i)-0.50)**2/(0.1018)**2)
+  enddo
+  endif
+  if (i_threshold .eq. 4) then
+  do i = 1,n_rho_grid
+   if(rho_hat(i) .ge. 0.50) &
+    rg_n_alpha_th_rho(i) = 0.013*(1.0+(rho_hat(i)-0.45)**2/(0.10)**2)
+   if(rho_hat(i) .lt. 0.50) &
+    rg_n_alpha_th_rho(i) = 0.013*(1.0+(rho_hat(i)-0.45)**2/(0.118)**2)
+  enddo
+  endif
+  if (i_threshold .eq. 5) then
+  do i = 1,n_rho_grid
+   if(rho_hat(i) .ge. 0.50) &
+    rg_n_alpha_th_rho(i) = 0.04*(1.0+(rho_hat(i)-0.50)**2/(0.1)**2)
+   if(rho_hat(i) .lt. 0.50) &
+    rg_n_alpha_th_rho(i) = 0.04*(1.0+(rho_hat(i)-0.50)**2/(0.35)**2)
+  enddo
+  endif
+  if (i_threshold .eq. 6) then
+  do i = 1,n_rho_grid
+   if(rho_hat(i) .ge. 0.55) &
+    rg_n_alpha_th_rho(i) = 0.015*(1.0+(rho_hat(i)-0.55)**2/(0.096)**2)
+   if(rho_hat(i) .lt. 0.55) &
+    rg_n_alpha_th_rho(i) = 0.015*(1.0+(rho_hat(i)-0.55)**2/(0.192)**2)
+  enddo
+  endif
+  if (i_threshold .eq.7) then 
+  do i = 1,n_rho_grid
+   if(rho_hat(i) .ge. 0.4) &
+    rg_n_alpha_th_rho(i) = 0.017*(1.0+(rho_hat(i)-0.4)**2/(0.2287)**2)
+   if(rho_hat(i) .lt. 0.4) &
+    rg_n_alpha_th_rho(i) = 0.017*(1.0+(rho_hat(i)-0.4)**2/(0.125)**2)
+  enddo
+  endif
+  if (i_threshold .eq.8) then  !NBI DIIID caseD   iso-Max
+  do i = 1,n_rho_grid
+   if(rho_hat(i) .ge. 0.5) &
+    rg_n_alpha_th_rho(i) = 0.15*(1.0+(rho_hat(i)-0.5)**2/(0.13)**2)
+   if(rho_hat(i) .lt. 0.5) &
+    rg_n_alpha_th_rho(i) = 0.15*(1.0+(rho_hat(i)-0.5)**2/(0.13)**2)
+  enddo
+  endif
+  if (i_threshold .eq.9) then  !NBI DIIID caseD   SD-beam-like
+  do i = 1,n_rho_grid
+   if(rho_hat(i) .ge. 0.5) &
+    rg_n_alpha_th_rho(i) = 0.075*(1.0+(rho_hat(i)-0.5)**2/(0.0903)**2)
+   if(rho_hat(i) .lt. 0.5) &
+    rg_n_alpha_th_rho(i) = 0.075*(1.0+(rho_hat(i)-0.5)**2/(0.1035)**2)
+  enddo
+  endif
+
+  if(i_threshold .eq. 10) then    !  TGLF input
+    select case (l_critgrad_method)  ! Density or pressure critical gradient
+      case (1)    ! Density
+        rg_n_alpha_th_rho(:) = crit_grad_n_alpha_rho(:)
+      case (2)    ! Pressure
+        rg_p_alpha_th_rho(:) = crit_grad_p_alpha_rho(:)
+    end select
+  endif
+
+
+  if (l_critgrad_method .ne. 2) then     ! set-up alpha critical pressure gradient
+    do i = 2,n_rho_grid-1
+     rg_p_alpha_th_rho(i)= T_alpha_equiv_rho(i)*rg_n_alpha_th_rho(i)*0.16022* &
+        (1. +(T_alpha_equiv_rho(i+1)-T_alpha_equiv_rho(i-1))/T_alpha_equiv_rho(i)/ &
+           (n_alpha_rho(i+1)-n_alpha_rho(i-1))*n_alpha_rho(i))
+    enddo
+    rg_p_alpha_th_rho(1) = rg_p_alpha_th_rho(2)
+    rg_p_alpha_th_rho(n_rho_grid) = rg_p_alpha_th_rho(n_rho_grid-1)
+  endif  ! l_crit_grad_method /= 2
+
+
+  if (l_crit_smooth .eq. 1) then
+    nr = n_rho_grid
+    d2pdr2_crit_f(:) = 0.0
+    d2pdr2_crit_b(:) = 0.0
+    d2pdr2_crit_f(2:nr-1) = (rg_p_alpha_th_rho(3:nr) - rg_p_alpha_th_rho(2:nr-1)) / dr_rho(2:nr-1)
+    d2pdr2_crit_b(2:nr-1) = (rg_p_alpha_th_rho(2:nr-1) - rg_p_alpha_th_rho(1:nr-2)) / dr_rho(1:nr-2)
+    x_smooth_check(:) = abs(d2pdr2_crit_f(:)-d2pdr2_crit_b(:)) / (min(abs(d2pdr2_crit_f),abs(d2pdr2_crit_b))+1.0E-4)
+    do i = 2, nr-1
+      if (x_smooth_check(i) .gt. 0.5) then
+        rg_p_alpha_th_rho(i) = 0.4*rg_p_alpha_th_rho(i)+0.3*(rg_p_alpha_th_rho(i-1)+rg_p_alpha_th_rho(i+1))
+      endif
+    enddo
+  endif
+
+!starting n_alpha_tran_rho solution
+  do i = 1,n_rho_grid
+    n_alpha_tran_rho(i) = n_alpha_rho(i)*(1.+delta0*(rho_hat(i)-rdelta0)/rdelta0) 
+  enddo
+
+!special BC 
+    n_alpha_tran_rho(n_rho_grid) = delta1*n_alpha_rho(n_rho_grid)
+
+!  same 5-point stencil as the in-loop calculation below, so 'Initial'
+!  and 'Relaxed' outputs stay a fair, apples-to-apples comparison.
+   rg_n_alpha_tran_rho(1) = 0.
+   i = 2
+    rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i+1)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
+  do i = 3,n_rho_grid-2
+    rg_n_alpha_tran_rho(i)= -(-n_alpha_tran_rho(i+2)+8.*n_alpha_tran_rho(i+1) &
+                              -8.*n_alpha_tran_rho(i-1)+n_alpha_tran_rho(i-2)) &
+                              /rmin/(6.*(rho_hat(i+1)-rho_hat(i-1)))
+  enddo
+   i = n_rho_grid-1
+    rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i+1)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
+   i=n_rho_grid
+    rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i)-rho_hat(i-1))
+!end starting n_alpha_tran_rho solution  
+
+!test model for D_bkg
+    D_alpha(:) = D_bkg
+
+!direct computaion of the staring flux
+
+!!!!     flux_rho(1)=0.
+!!!!     do i=2,n_rho_grid
+!!!!      flux_rho(i) = V_prime_rho(i-1)/V_prime_rho(i)*flux_rho(i-1) + 0.5*dr/V_prime_rho(i)* &
+!!!!         (V_prime_rho(i)*S0_rho(i)*(1.0 - SDsink*n_alpha_tran_rho(i)/n_alpha_rho(i)) + &
+!!!!           V_prime_rho(i-1)*S0_rho(i-1)*(1.0 - SDsink*n_alpha_tran_rho(i-1)/n_alpha_rho(i-1)))
+!!!!     enddo
+
+     do i=1,n_rho_grid
+      net_of_sink(i) = 1.0 - SDsink*n_alpha_tran_rho(i)/n_alpha_rho(i)
+     enddo
+
+   flux_rho(:) = 0.
+   flux_rho(1)=0.
+     do i=2,n_rho_grid
+      flux_rho(i) = V_prime_rho(i-1)/V_prime_rho(i)*flux_rho(i-1) + &
+             0.5*dr_rho(i)/V_prime_rho(i)* &
+         (V_prime_rho(i)*S0_rho(i)*net_of_sink(i) + &
+           V_prime_rho(i-1)*S0_rho(i-1)*net_of_sink(i-1))
+     enddo
+
+
+!source flux without SDsink
+     flux_source_rho(1)=0.
+     do i=2,n_rho_grid
+      flux_source_rho(i) = V_prime_rho(i-1)/V_prime_rho(i)*flux_source_rho(i-1) + 0.5*dr_rho(i)/V_prime_rho(i)* &
+         (V_prime_rho(i)*S0_rho(i)*(1.0 - 0.0*n_alpha_tran_rho(i)/n_alpha_rho(i)) + &  !  EMB edit here for self-consistent
+           V_prime_rho(i-1)*S0_rho(i-1)*(1.0 - 0.0*n_alpha_tran_rho(i-1)/n_alpha_rho(i-1)))  ! heat deposition
+     enddo
+
+
+!SPECIAL  batch.out DEBUG prints
+!
+!   print *, 'start SPECIAL batch.out DEBUG prints' 
+!   print *, 'SDsink=',SDsink
+!   print *, 'flux_rho(i),flux_source_rho(i)'
+! 
+!  do i=1,n_rho_grid
+!   print *, flux_rho(i),flux_source_rho(i)
+!  enddo
+!
+!  print *, 'x=SDsink*n_alpha_tran_rho(i)/n_alpha_rho(i), 1-x'
+!  do i=2,n_rho_grid-1
+!   print *,  SDsink*n_alpha_tran_rho(i)/n_alpha_rho(i),  & 
+!      1.0 - SDsink*n_alpha_tran_rho(i)/n_alpha_rho(i)
+!  enddo
+!
+!  print *, 'net_of_sink(i)'
+!  do i=1,n_rho_grid
+!    print *, net_of_sink(i)
+!  enddo
+!  print *, 'end SPECIAL batch.out DEBUG prints'
+!
+!SPECIAL  batch.out DEBUG prints  END
+
+
+
+  open(unit=3,file='Alpha_transport.out',status='replace')
+! JBL 08/31/26 debug
+  open(unit=12,file='Alpha_convergence_trace.out',status='replace')
+
+!SPECIAL DEBUG PRINT
+!    write(3,*) 'START SPECIAL DEBUG PRINT'
+!    write(3,*) 'SDsink=',SDsink
+!
+!  write(3,*) '--------------------------------------------------------------'
+!  write(3,*) 'starting transported alpha density profile'
+!  write(3,*) '--------------------------------------------------------------'
+!  write(3,*) 'alpha density in 10**19 1/m**3'
+!  do i = 1,n_rho_grid
+!   write(3,*) n_alpha_tran_rho(i)
+!  enddo
+!
+!
+!  write(3,*) '--------------------------------------------------------------'
+!  write(3,*) 'starting flow of alpha density profile'
+!  write(3,*) '--------------------------------------------------------------'
+!  write(3,*) 'alpha flow in [10**19 1/m**3]*[m/sec]*m**2'
+!  do i = 1,n_rho_grid
+!   write(3,*) flux_rho(i)*V_prime_rho(i)
+!  enddo
+!
+!  write(3,*) '--------------------------------------------------------------'
+!  write(3,*) 'starting sourec flow of alpha density profile'
+!  write(3,*) '--------------------------------------------------------------'
+!  write(3,*) 'alpha flow in [10**19 1/m**3]*[m/sec]*m**2'
+!  do i = 1,n_rho_grid
+!   write(3,*) flux_source_rho(i)*V_prime_rho(i)
+!  enddo
+!
+!  write(3,*) 'END SPECIAL DEBUG PRINT'
+!SPECIAL DEBUG PRINT
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'input parameters'
+
+  write(3,*) n_rho_grid, '  n_rho_grid'
+  write(3,*) 'i_tot_TAE=',i_tot_TAE !3.09.2016
+
+  write(3,*) 'SDsink =',SDsink 
+  write(3,*) 'delta0=',delta0
+  write(3,*) 'delta1=',delta1
+  write(3,*) 'rdelta0=',rdelta0
+  write(3,*) 'D_bkg =',D_bkg 
+  write(3,*) 'D_TAE =',D_TAE 
+  write(3,*) 'thfac =',thfrac
+  write(3,*) 'thdip =',thdip
+  write(3,*) 'i_bkg_Angioni=',i_bkg_Angioni
+  write(3,*) 'Angi_Pinch_fac=',Angi_Pinch_fac
+  write(3,*) 'Angi_exp=',Angi_exp,'  -1 is correct +1 is incorrect'
+  write(3,*) 'Angi_neagtive=',Angi_negative, '1 means D_Angioni = abs(D_Angioni)'
+  write(3,*) 'i_He_tran=',i_He_tran
+  write(3,*) 'i_threshold=',i_threshold
+  write(3,*) 'beta_peaker=',beta_peaker
+  write(3,*) 'Q_fus=',Q_fus
+  write(3,*) 'sd_renorm=', sd_renorm, 'CHECK  1.0 is default'
+  write(3,*) '--------------------------------------------------------------'
+
+  write(3,*) 'relax=',relax
+  write(3,*) 'n_up_loop=',n_up_loop
+  write(3,*) '--------------------------------------------------------------'
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'r_hat or rho_hat grid'
+  write(3,*) '--------------------------------------------------------------'
+  do i = 1,n_rho_grid
+   write(3,*) rho_hat(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'slowing down alpha density profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha density in 10**19 1/m**3'
+  do i = 1,n_rho_grid
+   write(3,*) n_alpha_rho(i)
+  enddo
+!4.13.15
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'slowing down alpha pressure profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha presure in 10**4 N/m**2'
+  do i = 1,n_rho_grid
+   p_alpha_rho(i) = n_alpha_rho(i)*T_alpha_equiv_rho(i)*0.16022
+   write(3,*)  p_alpha_rho(i)
+  enddo
+!4.13.15
+!3.14.16
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'slowing down alpha pressure gradient profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha presure gradient in 10**4 N/m**2/m'
+  do i = 2,n_rho_grid-1
+   rg_p_alpha_rho(i) = -(p_alpha_rho(i+1)-p_alpha_rho(i-1))/ &
+                           rmin/(rho_hat(i+1)-rho_hat(i-1))
+  enddo
+  rg_p_alpha_rho(1) = 0.
+  i=n_rho_grid
+  rg_p_alpha_rho(i) = -(p_alpha_rho(i)-p_alpha_rho(i-1))/ &
+                           rmin/(rho_hat(i)-rho_hat(i-1))
+!   rg_p_alpha_rho(:) = EXPRO_ni(i_EP,:)*EXPRO_Ti(i_EP,:)*(EXPRO_dlnnidr(i_EP,:)+EXPRO_dlntidr(i_EP,:))*0.16022
+   do i=1,n_rho_grid
+     write(3,*) rg_p_alpha_rho(i)
+   enddo
+!3.14.16
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha critical pressure gradient profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha critical pressure gradient in 10**4 N/m**2/m'
+  do i = 1,n_rho_grid
+   write(3,*)  rg_p_alpha_th_rho(i)
+  enddo
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'starting transported alpha density profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha density in 10**19 1/m**3'
+  do i = 1,n_rho_grid
+   write(3,*) n_alpha_tran_rho(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'starting transported alpha density gradient profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha density in 10**19 1/m**3*1/m'
+  do i = 1,n_rho_grid
+   write(3,*) rg_n_alpha_tran_rho(i)
+  enddo
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'starting flow of alpha density profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha flow in [10**19 1/m**3]*[m/sec]*m**2'
+  do i = 1,n_rho_grid
+   write(3,*) flux_rho(i)*V_prime_rho(i)
+  enddo
+
+!  write(3,*) '--------------------------------------------------------------'
+!  write(3,*) 'plasma chi_eff from  alpha energy source flow times (1+5./Q_fus)'
+!  write(3,*) 'T_e = T_i & n_e = n_i assumed:  chi_eff in m**2/sec'
+!  write(3,*) 'Q_fus=',Q_fus
+!  write(3,*) '--------------------------------------------------------------'
+!  do i = 2,n_rho_grid-1
+!    chi_eff(i) =  (1.+5./Q_fus)*flux_source_rho(i)*(E_alpha*1000.)/n_i_rho(i)/ &
+!         ((-T_i_rho(i+1)+T_i_rho(i-1))/(2.*dr))
+!  enddo
+!   i=n_rho_grid
+!    chi_eff(i) = (1.+5./Q_fus)*flux_source_rho(i)*(E_alpha*1000.)/n_i_rho(i)/ &
+!         ((-T_i_rho(i)+T_i_rho(i-1))/dr)
+!
+!    chi_eff(1) = chi_eff(2)
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'plasma chi_eff from  alpha energy source flow times (1+5./Q_fus)'
+  write(3,*) 'T_e NOTnec= T_i and n_e NOTnec= n_i assumed chi_eff in m**2/sec'
+  write(3,*) 'Q_fus=',Q_fus
+  write(3,*) '--------------------------------------------------------------'
+  do i = 2,n_rho_grid-1
+    chi_eff(i) =  (1.+5./Q_fus)*flux_source_rho(i)*(E_alpha*1000.)/&
+     (0.5*n_i_rho(i)*(-T_i_rho(i+1)+T_i_rho(i-1))/(2.*dr_rho(i)) + &
+      0.5*n_e_rho(i)*(-T_e_rho(i+1)+T_e_rho(i-1))/(2.*dr_rho(i))) 
+  enddo
+   i=n_rho_grid
+    chi_eff(i) = (1.+5./Q_fus)*flux_source_rho(i)*(E_alpha*1000.)/ &
+         (0.5*n_i_rho(i)*(-T_i_rho(i)+T_i_rho(i-1))/dr_rho(i) + &
+          0.5*n_e_rho(i)*(-T_e_rho(i)+T_e_rho(i-1))/dr_rho(i))
+
+    chi_eff(1) = chi_eff(2)
+
+
+  do i = 1,n_rho_grid
+   write(3,*) chi_eff(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  if (l_read_D_bkg) then
+    write(3,*) 'alpha ITG/TEM diffusivity from TGLFEP output'
+  else
+    write(3,*) 'alpha ITG/TEM diffusivity from Angioni formulas normed to chi_eff'
+  endif
+  write(3,*) '--------------------------------------------------------------'
+  do i = 1,n_rho_grid
+    if (l_read_D_bkg) then
+      D_bkg_Angioni(i) = D_bkg_read(i)
+    else
+         D_bkg_Angioni(i)=chi_eff(i)*&
+               (0.02+4.5*(T_e_rho(i)/(E_alpha*1000.))&
+               +8.0*(T_e_rho(i)/(E_alpha*1000.))**2&
+               +350.*(T_e_rho(i)/(E_alpha*1000.))**3)
+    endif
+    write(3,*) D_bkg_Angioni(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'Angioni pinch coef C_p_alpha'
+  write(3,*) '--------------------------------------------------------------'
+  do i = 2,n_rho_grid-1
+   C_p_alpha(i) = (3./2.)*Rmaj_rho(i)*(-T_e_rho(i+1)+T_e_rho(i-1))/(2.*dr_rho(i))/T_e_rho(i)*&
+                (1./(1.+1./E_c_hat_rho(i)**(Angi_exp*1.5))/log(1.+1./E_c_hat_rho(i)**1.5)-1.)
+
+  enddo
+   i=n_rho_grid
+   C_p_alpha(i) = (3./2.)*Rmaj_rho(i)*(-T_e_rho(i)+T_e_rho(i-1))/dr_rho(i)/T_e_rho(i)*&
+                (1./(1.+1./E_c_hat_rho(i)**(Angi_exp*1.5))/log(1.+1./E_c_hat_rho(i)**1.5)-1.)
+   C_p_alpha(1) = 0.
+  do i =1,n_rho_grid
+   write(3,*) C_p_alpha(i)
+  enddo
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'net alpha ITG/TEM diffusivity from Angioni formulas normed to chi_eff'
+  write(3,*) 'with starting in/out pinch (not used if D_bkg read from TGLFEP)'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) D_bkg_Angioni(1)
+  D_alpha(1) = D_bkg_Angioni(1)
+  do i = 2,n_rho_grid-1
+    pinch_check = Angi_Pinch_fac*C_p_alpha(i)*(2.*dr_rho(i))*n_alpha_rho(i)/(-n_alpha_rho(i+1)+n_alpha_rho(i-1))/Rmaj_rho(i)
+    comment = ' '
+    if ((pinch_check .lt. -0.9) .and. (Angi_negative .eq. 1)) then
+      pinch_check = -0.9
+      comment = ', pinch constrained to maintain D_bkg_Angion>0'
+    endif
+    D_alpha(i) = D_bkg_Angioni(i)*(1.0+pinch_check)
+    write(3,*) D_alpha(i), trim(comment)
+
+!    write(3,*) D_bkg_Angioni(i)*& 
+!           (1.+Angi_Pinch_fac*C_p_alpha(i)*(2.*dr_rho(i))*n_alpha_rho(i)/(-n_alpha_rho(i+1)+n_alpha_rho(i-1))/Rmaj_rho(i))
+  enddo
+  i=n_rho_grid
+  pinch_check = Angi_Pinch_fac*C_p_alpha(i)*dr_rho(i)*n_alpha_rho(i)/(-n_alpha_rho(i)+n_alpha_rho(i-1))/Rmaj_rho(i)
+  comment = ' '
+  if ((pinch_check .lt. -0.9) .and. (Angi_negative .eq. 1)) then
+    pinch_check = -0.9
+    comment = ', pinch constrained to maintain D_bkg_Angion>0'
+  endif
+  D_alpha(i) = D_bkg_Angioni(i)*(1.0+pinch_check)
+  write(3,*) D_alpha(i), trim(comment)
+!   write(3,*) D_bkg_Angioni(i)*&
+!          (1.+Angi_Pinch_fac*C_p_alpha(i)*dr_rho(i)*n_alpha_rho(i)/(-n_alpha_rho(i)+n_alpha_rho(i-1))/Rmaj_rho(i))
+
+  if ((.not. l_pinch_update) .and. (.not. l_read_D_bkg)) D_bkg_Angioni = D_alpha
+
+  if (l_read_D_bkg .and. (Angi_negative .eq. 1)) then
+! If l_read_D_bkg is true, D_bkg_Angioni is still the TGLFEP output value here.
+    do i = 1, n_rho_grid
+      D_bkg_Angioni(i) = max(D_bkg_Angioni(i),D_bkg)
+    enddo 
+  endif
+  
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) '1Mev diffusivity  ratio to 3.5 Mev diffusivity'
+  write(3,*) 'from Angioni formulas  for diffusive part'
+  write(3,*) '--------------------------------------------------------------'
+  do i = 1,n_rho_grid
+   write(3,*) &
+      (0.02+4.5*(T_e_rho(i)/1000.)&
+               +8.0*(T_e_rho(i)/1000.)**2&
+               +350.*(T_e_rho(i)/1000.)**3)/&
+      (0.02+4.5*(T_e_rho(i)/3500.)&
+               +8.0*(T_e_rho(i)/3500.)**2&
+               +350.*(T_e_rho(i)/3500.)**3)
+  enddo
+
+
+!8.22.13  start He transport set up
+
+  if(i_He_tran .gt. 0) then
+
+  do i=1,n_rho_grid
+   n_He_tran_rho(i)=(n_e_rho(i)-n_e_rho(n_rho_grid))*0.05
+  enddo
+  
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'He BC = 0.0'
+  write(3,*) '--------------------------------------------------------------'
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'He ITG/TEM diffusivity from Angioni formulas normed to chi_eff'
+  write(3,*) '--------------------------------------------------------------'
+  do i = 1,n_rho_grid
+        D_bkg_Angioni_He(i)=chi_eff(i)
+   write(3,*) D_bkg_Angioni_He(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'Angioni pinch coef C_p_He = -2.0 '
+  write(3,*) 'Small Angioni thermal expulsion +C_T_He*n_He/L_Ti set to 0'
+  write(3,*) '--------------------------------------------------------------'
+  do i = 2,n_rho_grid
+   C_p_He(i) = -2.0
+  enddo
+   C_p_He(1) = 0.
+  
+  
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'net He ITG/TEM diffusivity from Angioni formulas normed to chi_eff'
+  write(3,*) 'with starting in/out pinch'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) D_bkg_Angioni_He(1)
+  do i = 2,n_rho_grid-1
+       write(3,*) D_bkg_Angioni_He(i)*&
+         (1.+C_p_He(i)*(2.*dr_rho(i))*n_He_tran_rho(i)/(-n_He_tran_rho(i+1)+n_He_tran_rho(i-1))/Rmaj_rho(i))
+  enddo
+  i=n_rho_grid
+   write(3,*) D_bkg_Angioni_He(i)*&
+          (1.+C_p_He(i)*dr_rho(i)*n_He_tran_rho(i)/(-n_He_tran_rho(i)+n_He_tran_rho(i-1))/Rmaj_rho(i))
+
+ 
+  endif ! i_He_tran
+
+!2A
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'BEGIN starting Alpha snd He et-up '
+  write(3,*) '--------------------------------------------------------------'
+
+  if(NBI_flag .eq. 2) then
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'BEGIN starting Alpha2 set-up '
+  write(3,*) '--------------------------------------------------------------'
+
+! hardwires
+   thfrac2=0.5 !default
+   thdip2=5.
+   n_thdip2 = 2 !default
+
+!   i_threshold2 = 7
+   i_threshold2 =10  !TGLF input
+  
+   
+
+   
+!compute radial gradient of alpha2 slowing down density
+
+    rg_n_alpha2_rho(1) = 0.
+  do i = 2,n_rho_grid-1
+    rg_n_alpha2_rho(i)= -(n_alpha2_rho(i+1)-n_alpha2_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
+  enddo
+   i=n_rho_grid
+    rg_n_alpha2_rho(i)= -(n_alpha2_rho(i)-n_alpha2_rho(i-1))/rmin/(rho_hat(i)-rho_hat(i-1))
+
+!test set-up
+
+!test model for rg_n_alpha2_th_rho
+  do i = 1,n_rho_grid
+    rg_n_alpha2_th_rho(i) = thfrac2*rg_n_alpha2_rho(25)*(1.+thdip2*(rho_hat(i)-rho_hat(25))**n_thdip2)
+  enddo
+
+  if (i_threshold2 .eq.7) then
+  do i = 1,n_rho_grid
+   if(rho_hat(i) .ge. 0.4) &
+    rg_n_alpha2_th_rho(i) = 0.017*(1.0+(rho_hat(i)-0.4)**2/(0.2287)**2)
+   if(rho_hat(i) .lt. 0.4) &
+    rg_n_alpha2_th_rho(i) = 0.017*(1.0+(rho_hat(i)-0.4)**2/(0.125)**2)
+  enddo
+    rg_n_alpha2_th_rho(:) = 3.5/1.0*rg_n_alpha2_th_rho(:) !pressure equivalent
+  endif
+
+   if(i_threshold2 .eq. 10) then
+    select case (l_critgrad_method)  ! Density or pressure critical gradient
+      case (1)    ! Density
+        rg_n_alpha2_th_rho(:) = crit_grad_n_alpha2_rho(:)
+      case (2)    ! Pressure
+        rg_p_alpha2_th_rho(:) = crit_grad_p_alpha2_rho(:)
+    end select
+   endif
+
+
+! set-up alpha2 critical pressure gardient
+  if (l_critgrad_method .ne. 2) then
+    do i = 2,n_rho_grid-1
+      rg_p_alpha2_th_rho(i)= T_alpha2_equiv_rho(i)*rg_n_alpha2_th_rho(i)*0.16022* &
+         (1. +(T_alpha2_equiv_rho(i+1)-T_alpha2_equiv_rho(i-1))/T_alpha2_equiv_rho(i)/ &
+              (n_alpha2_rho(i+1)-n_alpha2_rho(i-1))*n_alpha2_rho(i))
+    enddo
+    rg_p_alpha2_th_rho(1) = rg_p_alpha2_th_rho(2)
+    rg_p_alpha2_th_rho(n_rho_grid) = rg_p_alpha2_th_rho(n_rho_grid-1)
+  endif  ! l_critgrad_method /= 2
+
+  if (l_crit_smooth .eq. 1) then
+    nr = n_rho_grid
+    d2pdr2_crit_f(:) = 0.0
+    d2pdr2_crit_b(:) = 0.0
+    d2pdr2_crit_f(2:nr-1) = (rg_p_alpha2_th_rho(3:nr) - rg_p_alpha2_th_rho(2:nr-1)) / dr_rho(2:nr-1)
+    d2pdr2_crit_b(2:nr-1) = (rg_p_alpha2_th_rho(2:nr-1) - rg_p_alpha2_th_rho(1:nr-2)) / dr_rho(1:nr-2)
+    x_smooth_check(:) = abs(d2pdr2_crit_f(:)-d2pdr2_crit_b(:)) / (min(abs(d2pdr2_crit_f),abs(d2pdr2_crit_b))+1.0E-4)
+    do i = 2, nr-1
+      if (x_smooth_check(i) .gt. 0.5) then
+        rg_p_alpha2_th_rho(i) = 0.4*rg_p_alpha2_th_rho(i)+0.3*(rg_p_alpha2_th_rho(i-1)+rg_p_alpha2_th_rho(i+1))
+      endif
+    enddo
+  endif
+  
+
+
+! set-up alpha_tot critical pressure gradient
+   do i=1,n_rho_grid
+    rg_p_alpha_tot_th_rho(i) = sqrt(rg_p_alpha_th_rho(i)*rg_p_alpha2_th_rho(i))
+   enddo
+! set-up alpha and alpha2 rg_p factors
+   do i=1,n_rho_grid
+    rg_p_alpha_fac_rho(i) = sqrt(rg_p_alpha2_th_rho(i)/rg_p_alpha_th_rho(i))
+    rg_p_alpha2_fac_rho(i) = sqrt(rg_p_alpha_th_rho(i)/rg_p_alpha2_th_rho(i))
+   enddo
+   
+
+
+
+!starting n_alpha2_tran_rho solution
+  do i = 1,n_rho_grid
+    n_alpha2_tran_rho(i) = n_alpha2_rho(i)*(1.+delta0*(rho_hat(i)-rdelta0)/rdelta0)
+  enddo
+
+!special BC 
+    n_alpha2_tran_rho(n_rho_grid) = delta1*n_alpha2_rho(n_rho_grid)
+
+   rg_n_alpha2_tran_rho(1) = 0.
+  do i = 2,n_rho_grid-1
+    rg_n_alpha2_tran_rho(i)= -(n_alpha2_tran_rho(i+1)-n_alpha2_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
+  enddo
+   i=n_rho_grid
+    rg_n_alpha2_tran_rho(i)= -(n_alpha2_tran_rho(i)-n_alpha2_tran_rho(i-1))/rmin/(rho_hat(i)-rho_hat(i-1))
+!end starting n_alpha_tran_rho solution  
+
+!test model for D_bkg
+    D_alpha2(:) = D_bkg
+
+!direct computaion of the staring flux2
+
+!     flux2_rho(1)=0.
+!     do i=2,n_rho_grid
+!      flux2_rho(i) = V_prime_rho(i-1)/V_prime_rho(i)*flux2_rho(i-1) + 0.5*dr/V_prime_rho(i)*&
+!         (V_prime_rho(i)*S02_rho(i)*(1.0 - SDsink*n_alpha2_tran_rho(i)/n_alpha2_rho(i)) + &
+!           V_prime_rho(i-1)*S02_rho(i-1)*(1.0 - SDsink*n_alpha2_tran_rho(i-1)/n_alpha2_rho(i-1)))
+!     enddo
+
+     do i=1,n_rho_grid
+      net_of_sink2(i) = 1.0 - SDsink*n_alpha2_tran_rho(i)/n_alpha2_rho(i)
+     enddo
+
+   flux2_rho(:) = 0.
+   flux2_rho(1)=0.
+     do i=2,n_rho_grid
+      flux2_rho(i) = V_prime_rho(i-1)/V_prime_rho(i)*flux2_rho(i-1) + &
+             0.5*dr_rho(i)/V_prime_rho(i)* &
+         (V_prime_rho(i)*S02_rho(i)*net_of_sink2(i) + &
+           V_prime_rho(i-1)*S02_rho(i-1)*net_of_sink2(i-1))
+     enddo
+
+!source flux without SDsink
+     flux2_source_rho(1)=0.
+     do i=2,n_rho_grid
+      flux2_source_rho(i) = V_prime_rho(i-1)/V_prime_rho(i)*flux2_source_rho(i-1) + 0.5*dr_rho(i)/V_prime_rho(i)*&
+         (V_prime_rho(i)*S02_rho(i)*(1.0 - 0.0*n_alpha2_tran_rho(i)/n_alpha2_rho(i)) + &
+           V_prime_rho(i-1)*S02_rho(i-1)*(1.0 - 0.0*n_alpha2_tran_rho(i-1)/n_alpha2_rho(i-1)))
+     enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'slowing down alpha2 density profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2 density in 10**19 1/m**3'
+  do i = 1,n_rho_grid
+   write(3,*) n_alpha2_rho(i)
+  enddo
+!4.13.15
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'slowing down alpha2 pressure profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2 presure in 10**4 N/m**2'
+  do i = 1,n_rho_grid
+   p_alpha2_rho(i) = n_alpha2_rho(i)*T_alpha2_equiv_rho(i)*0.16022
+   write(3,*)  p_alpha2_rho(i)
+  enddo
+!4.13.15
+!3.14.16
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'slowing down alpha2 pressure gradient profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha presure gradient in 10**4 N/m**2/m'
+  do i = 2,n_rho_grid-1
+   rg_p_alpha2_rho(i) = -(p_alpha2_rho(i+1)-p_alpha2_rho(i-1))/ &
+                           rmin/(rho_hat(i+1)-rho_hat(i-1))
+  enddo
+  rg_p_alpha2_rho(1) = 0.
+  i=n_rho_grid
+  rg_p_alpha2_rho(i) = -(p_alpha2_rho(i)-p_alpha2_rho(i-1))/ &
+                           rmin/(rho_hat(i)-rho_hat(i-1))
+   do i=1,n_rho_grid
+     write(3,*) rg_p_alpha2_rho(i)
+   enddo
+!3.14.16
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2 critical pressure gradient profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2 critical pressure gradient in 10**4 N/m**2/m'
+  do i = 1,n_rho_grid
+   write(3,*)  rg_p_alpha2_th_rho(i)
+  enddo
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha  pressure gradient  factor  profile'
+  write(3,*) '--------------------------------------------------------------'
+  do i = 1,n_rho_grid
+   write(3,*)  rg_p_alpha_fac_rho(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2  pressure gradient  factor  profile'
+  write(3,*) '--------------------------------------------------------------'
+  do i = 1,n_rho_grid
+   write(3,*)  rg_p_alpha2_fac_rho(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'starting transported alpha2 density profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2 density in 10**19 1/m**3'
+  do i = 1,n_rho_grid
+   write(3,*) n_alpha2_tran_rho(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'starting transported alpha2 density gradient profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2 density in 10**19 1/m**3*1/m'
+  do i = 1,n_rho_grid
+   write(3,*) rg_n_alpha2_tran_rho(i)
+  enddo
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'starting flow of alpha2 density profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2 flow in [10**19 1/m**3]*[m/sec]*m**2'
+  do i = 1,n_rho_grid
+   write(3,*) flux2_rho(i)*V_prime_rho(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2 ITG/TEM diffusivity from Angioni formulas normed to chi_eff'
+  write(3,*) '--------------------------------------------------------------'
+  do i = 1,n_rho_grid
+        D_bkg_Angioni2(i)=chi_eff(i)*&
+               (0.02+4.5*(T_e_rho(i)/(E_alpha2*1000.))&
+               +8.0*(T_e_rho(i)/(E_alpha2*1000.))**2&
+               +350.*(T_e_rho(i)/(E_alpha2*1000.))**3)
+   write(3,*) D_bkg_Angioni2(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'Angioni pinch coef C_p_alpha2'
+  write(3,*) '--------------------------------------------------------------'
+  do i = 2,n_rho_grid-1
+   C_p_alpha2(i) = (3./2.)*Rmaj_rho(i)*(-T_e_rho(i+1)+T_e_rho(i-1))/(2.*dr_rho(i))/T_e_rho(i)*&
+                (1./(1.+1./E_c_hat2_rho(i)**(Angi_exp*1.5))/log(1.+1./E_c_hat2_rho(i)**1.5)-1.)
+
+  enddo
+   i=n_rho_grid
+   C_p_alpha2(i) = (3./2.)*Rmaj_rho(i)*(-T_e_rho(i)+T_e_rho(i-1))/dr_rho(i)/T_e_rho(i)*&
+                (1./(1.+1./E_c_hat2_rho(i)**(Angi_exp*1.5))/log(1.+1./E_c_hat2_rho(i)**1.5)-1.)
+   C_p_alpha2(1) = 0.
+  do i =1,n_rho_grid
+   write(3,*) C_p_alpha2(i)
+  enddo
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'net alpha2 ITG/TEM diffusivity from Angioni formulas normed to chi_eff'
+  write(3,*) 'with starting in/out pinch'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) D_bkg_Angioni2(1)
+  D_alpha2(1) = D_bkg_Angioni2(1)
+  do i = 2,n_rho_grid-1
+    pinch_check = Angi_Pinch_fac*C_p_alpha2(i)*(2.*dr_rho(i))*n_alpha2_rho(i)/(-n_alpha2_rho(i+1)+n_alpha2_rho(i-1))/Rmaj_rho(i)
+    comment = ' '
+    if ((pinch_check .lt. -0.9) .and. (Angi_negative .eq. 1)) then
+      pinch_check = -0.9
+      comment = ', pinch constrained to maintain D_bkg_Angion>0'
+    endif
+    D_alpha2(i) = D_bkg_Angioni2(i)*(1.0+pinch_check)
+    write(3,*) D_alpha2(i), trim(comment)
+!    write(3,*) D_bkg_Angioni2(i)*&
+!        (1.+Angi_Pinch_fac*C_p_alpha2(i)*(2.*dr_rho(i))*n_alpha2_rho(i)/(-n_alpha2_rho(i+1)+n_alpha2_rho(i-1))/Rmaj_rho(i))
+  enddo
+  i=n_rho_grid
+  pinch_check = Angi_Pinch_fac*C_p_alpha2(i)*(2.*dr_rho(i))*n_alpha2_rho(i)/(-n_alpha2_rho(i+1)+n_alpha2_rho(i-1))/Rmaj_rho(i)
+  comment = ' '
+  if ((pinch_check .lt. -0.9) .and. (Angi_negative .eq. 1)) then
+    pinch_check = -0.9
+    comment = ', pinch constrained to maintain D_bkg_Angion>0'
+  endif
+  D_alpha2(i) = D_bkg_Angioni2(i)*(1.0+pinch_check)
+  write(3,*) D_alpha2(i), trim(comment)
+!   write(3,*) D_bkg_Angioni2(i)*&
+!          (1.+Angi_Pinch_fac*C_p_alpha2(i)*dr_rho(i)*n_alpha2_rho(i)/(-n_alpha2_rho(i)+n_alpha2_rho(i-1))/Rmaj_rho(i))
+
+  if (.not. l_pinch_update) D_bkg_Angioni2 = D_alpha2
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'END starting Alpha2 set-up '
+  write(3,*) '--------------------------------------------------------------'
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'slowing down alpha _tot_pressure profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha_tot presure in 10**4 N/m**2'
+  do i = 1,n_rho_grid
+   p_alpha_tot_rho(i) = p_alpha_rho(i)+p_alpha2_rho(i)
+   write(3,*)  p_alpha_tot_rho(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha_tot critical pressure gradient profile'
+  write(3,*) ' geometric mean of alpha & alpha2'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha_tot critical pressure gradient in 10**4 N/m**2/m'
+  do i = 1,n_rho_grid
+   write(3,*)  rg_p_alpha_tot_th_rho(i)
+  enddo
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'END starting Alpha_tot set-up '
+  write(3,*) '--------------------------------------------------------------'
+
+  endif !NBI_flag =2
+!2A
+
+
+!implicite integration down the profile from r=0
+! vestigial programming...not used.....IGNORE i_dn_up .eq. 1
+
+   if(i_dn_up .eq. 1) then
+!   no longer used
+    print *, 'i_dn_up = 1 removed'
+   endif !i_dn_up = 1
+
+!intgegrate up the profile from  the outer BC 
+
+  if (i_dn_up .eq. 0) then
+
+
+!    write(3,*) 'ii   error  error_rho(1)  error_rho(25)'
+    write(3,*) 'ii    error_n    error_f   error_f_rho(25)'
+
+    do ii=1,100        ! Initialize time-average array
+      n_alpha_tran_accum_rho(:,ii) = n_alpha_tran_rho(:)
+    enddo
+
+    flux_rho(:) = 1.0E-5
+    D_alpha(:) = D_bkg
+
+    do ii=1,n_up_loop  !start iteration loop
+
+    flux_p_rho(:) = flux_rho(:)
+! p_alpha_rho(i) = n_alpha_rho(i)*T_alpha_equiv_rho(i)*0.16022
+! p_alpha2_rho(i) = n_alpha2_rho(i)*T_alpha2_equiv_rho(i)*0.16022
+
+   if(NBI_flag .eq. 2) then
+
+    rg_p_alpha_tot_tran_rho(1) = 0.
+    do i = 2,n_rho_grid-1
+     rg_p_alpha_tot_tran_rho(i) = &
+        -(n_alpha_tran_rho(i+1)*T_alpha_equiv_rho(i+1) &
+           -n_alpha_tran_rho(i-1)*T_alpha_equiv_rho(i-1))*0.16022/rmin/(rho_hat(i+1)-rho_hat(i-1)) &
+               *rg_p_alpha_fac_rho(i) &
+        -(n_alpha2_tran_rho(i+1)*T_alpha2_equiv_rho(i+1) &
+           -n_alpha2_tran_rho(i-1)*T_alpha2_equiv_rho(i-1))*0.16022/rmin/(rho_hat(i+1)-rho_hat(i-1)) &
+               *rg_p_alpha2_fac_rho(i)
+     enddo
+     i=n_rho_grid
+     rg_p_alpha_tot_tran_rho(i) = &
+        -(n_alpha_tran_rho(i)*T_alpha_equiv_rho(i) &
+           -n_alpha_tran_rho(i-1)*T_alpha_equiv_rho(i-1))*0.16022/rmin/(rho_hat(i)-rho_hat(i-1)) &
+               *rg_p_alpha_fac_rho(i) &
+        -(n_alpha2_tran_rho(i)*T_alpha2_equiv_rho(i) &
+           -n_alpha2_tran_rho(i-1)*T_alpha2_equiv_rho(i-1))*0.16022/rmin/(rho_hat(i)-rho_hat(i-1)) &
+               *rg_p_alpha2_fac_rho(i)
+   endif
+
+
+!compute n_alpha_tran_rho gradient
+!  5-point (4th-order) symmetric stencil: like the original 3-point
+!  centered difference, this is exactly blind to a pure grid-to-grid
+!  (Nyquist) checkerboard mode -- required algebraically of any
+!  symmetric, consistent 3-point-or-wider stencil -- but has a sharper
+!  rolloff approaching that frequency, damping near-Nyquist content
+!  more than the original 3-point version did.
+!  Falls back to the original 3-point centered formula at i=2 and
+!  i=n_rho_grid-1, where the 5-point stencil can't reach i-2/i+2.
+   rg_n_alpha_tran_rho(1) = 0.
+   i = 2
+    rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i+1)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
+  do i = 3,n_rho_grid-2
+    rg_n_alpha_tran_rho(i)= -(-n_alpha_tran_rho(i+2)+8.*n_alpha_tran_rho(i+1) &
+                              -8.*n_alpha_tran_rho(i-1)+n_alpha_tran_rho(i-2)) &
+                              /rmin/(6.*(rho_hat(i+1)-rho_hat(i-1)))
+  enddo
+   i = n_rho_grid-1
+    rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i+1)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
+   i=n_rho_grid
+    rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i)-rho_hat(i-1))
+
+!added 11.22.16
+   do i =1, n_rho_grid
+    p_alpha_rho(i) = n_alpha_rho(i)*T_alpha_equiv_rho(i)*0.16022
+   enddo
+
+!  same 5-point stencil as rg_n_alpha_tran_rho, applied to the n*T
+!  product -- keeps the pressure branch (i_tot_TAE=-1) on equal footing
+!  with the density branch (i_tot_TAE=0).
+    rg_p_alpha_tran_rho(1) = 0.
+   i = 2
+    rg_p_alpha_tran_rho(i) = &
+        -(n_alpha_tran_rho(i+1)*T_alpha_equiv_rho(i+1) &
+           -n_alpha_tran_rho(i-1)*T_alpha_equiv_rho(i-1))*0.16022/rmin/(rho_hat(i+1)-rho_hat(i-1))
+  do i = 3,n_rho_grid-2
+    rg_p_alpha_tran_rho(i) = &
+        -( -n_alpha_tran_rho(i+2)*T_alpha_equiv_rho(i+2) &
+           +8.*n_alpha_tran_rho(i+1)*T_alpha_equiv_rho(i+1) &
+           -8.*n_alpha_tran_rho(i-1)*T_alpha_equiv_rho(i-1) &
+           +n_alpha_tran_rho(i-2)*T_alpha_equiv_rho(i-2) ) &
+           *0.16022/rmin/(6.*(rho_hat(i+1)-rho_hat(i-1)))
+   enddo
+   i = n_rho_grid-1
+    rg_p_alpha_tran_rho(i) = &
+        -(n_alpha_tran_rho(i+1)*T_alpha_equiv_rho(i+1) &
+           -n_alpha_tran_rho(i-1)*T_alpha_equiv_rho(i-1))*0.16022/rmin/(rho_hat(i+1)-rho_hat(i-1))
+   i=n_rho_grid
+   rg_p_alpha_tran_rho(i) = -(n_alpha_tran_rho(i)*T_alpha_equiv_rho(i) &
+           -n_alpha_tran_rho(i-1)*T_alpha_equiv_rho(i-1))*0.16022/rmin/(rho_hat(i)-rho_hat(i-1))
+!end 11.22.16
+
+!compute D_alpha with updated stiff transport
+  do i = 1,n_rho_grid
+
+    D_alpha_p(i) = D_alpha(i)
+    D_alpha(i) = D_bkg
+
+!  start Angioni model
+    if(i_bkg_Angioni .eq. 1) then
+      if(i .ne. 1 .and. i .ne. n_rho_grid) then
+        if (l_pinch_update) then
+          pinch_check = Angi_Pinch_fac*C_p_alpha(i)/Rmaj_rho(i)*n_alpha_tran_rho(i)/rg_n_alpha_tran_rho(i)
+          if ((pinch_check .lt. -0.9) .and. (Angi_negative .eq. 1)) then
+            pinch_check = -0.9
+            print *, 'Iteration:', ii, '  Gridpoint:', i, '    | Pinch constrained to keep D_bkg > 0'
+          endif
+!          D_alpha(i) = D_bkg_Angioni(i)*&
+!          (1.+Angi_Pinch_fac*C_p_alpha(i)/Rmaj_rho(i)*n_alpha_tran_rho(i)/rg_n_alpha_tran_rho(i))
+          D_alpha(i) = D_bkg_Angioni(i)*(1.0+pinch_check)
+!          if(Angi_negative .eq. 1) then
+!            if (D_alpha(i) .lt. 0.0) print *, 'Iteration', ii, '   |   D_alpha sign flip at i=', i
+!            D_alpha(i) = abs(D_alpha(i))
+!          endif
+        else   ! No pinch update
+          D_alpha(i) = D_bkg_Angioni(i)
+        endif
+      endif  ! Not grid endpoints
+        
+    endif
+!  end Angioni model
+
+    if(i_tot_TAE .eq. 0) then
+     if (rg_n_alpha_tran_rho(i) .gt. rg_n_alpha_th_rho(i)) D_alpha(i) = D_alpha(i) + &
+                   D_TAE*(rg_n_alpha_tran_rho(i)-rg_n_alpha_th_rho(i))*rmin/n_alpha_rho(i)
+    endif
+    if(i_tot_TAE .eq. 1) then
+      if (rg_p_alpha_tot_tran_rho(i) .gt. rg_p_alpha_tot_th_rho(i)) D_alpha(i) = D_alpha(i) + &
+                   D_TAE*(rg_p_alpha_tot_tran_rho(i)-rg_p_alpha_tot_th_rho(i))*rmin/p_alpha_tot_rho(i)
+    endif
+    if(i_tot_TAE .eq. -1) then  !11.22.16
+     if (rg_p_alpha_tran_rho(i) .gt. rg_p_alpha_th_rho(i)) D_alpha(i) = D_alpha(i) + &
+                   D_TAE*(rg_p_alpha_tran_rho(i)-rg_p_alpha_th_rho(i))*rmin/p_alpha_rho(i)
+    endif
+
+  enddo  ! radial grid
+
+   if(i_bkg_Angioni .eq. 1) then
+    D_alpha(1) = D_alpha(2)
+    D_alpha(n_rho_grid) =D_alpha(n_rho_grid-1)
+   endif
+
+   D_alpha(:) = relax_f*D_alpha(:) + (1.-relax_f)*D_alpha_p(:)
+!    Filter grid-to-grid noise in D_alpha.
+!   D_alpha(2:n_rho_grid-1) = (D_alpha(1:n_rho_grid-2)+2.*D_alpha(2:n_rho_grid-1)+D_alpha(3:n_rho_grid))/4.0
+
+!save previous n_alpha_tran_rho & rg_n_alpha_tran_rho profiles
+     n_alpha_tran_p_rho(:) = n_alpha_tran_rho(:)
+     rg_n_alpha_tran_p_rho(:) = rg_n_alpha_tran_rho(:)  !fixed harmless error 8.22.13
+
+
+!compute flux   
+!!!!     flux_rho(1)=0.
+!!!!     do i=2,n_rho_grid
+!!!!      flux_rho(i) = V_prime_rho(i-1)/V_prime_rho(i)*flux_rho(i-1) + 0.5*dr/V_prime_rho(i)*&
+!!!!         (V_prime_rho(i)*S0_rho(i)*(1.0 - SDsink*n_alpha_tran_rho(i)/n_alpha_rho(i)) + &
+!!!!           V_prime_rho(i-1)*S0_rho(i-1)*(1.0 - SDsink*n_alpha_tran_rho(i-1)/n_alpha_rho(i-1)))
+!!!!     enddo
+
+     do i=1,n_rho_grid
+      net_of_sink(i) = 1.0 - SDsink*n_alpha_tran_rho(i)/n_alpha_rho(i)
+     enddo
+
+   flux_rho(:) = 0.
+   flux_rho(1)=0.
+     do i=2,n_rho_grid
+      flux_rho(i) = V_prime_rho(i-1)/V_prime_rho(i)*flux_rho(i-1) + &
+             0.5*dr_rho(i)/V_prime_rho(i)* &
+         (V_prime_rho(i)*S0_rho(i)*net_of_sink(i) + &
+           V_prime_rho(i-1)*S0_rho(i-1)*net_of_sink(i-1))
+     enddo
+   flux_0_rho(:) = flux_rho(:)
+
+!integrate up gradient
+!---- Banana smoothing of D_alpha    EMB
+!----
+!     flux_rho(:) = relax_f*flux_rho(:) + (1.-relax_f)*flux_p_rho(:)
+     do i=n_rho_grid-1,1,-1
+       n_alpha_tran_rho(i)=n_alpha_tran_rho(i+1)+dr_rho(i)*(flux_rho(i)+flux_rho(i+1))/&
+                                                    (D_alpha(i)+D_alpha(i+1))
+       n_alpha_tran_0_rho(i) = n_alpha_tran_rho(i+1)+dr_rho(i)*(flux_0_rho(i)+flux_0_rho(i+1))/&
+                                                    (D_alpha(i)+D_alpha(i+1))                                     
+     enddo
+
+  !compute convergence error
+   
+!  write(3,*) 'ii   error  error_rho(1)  error_rho(25)'
+   error=0.0
+   error_f = 0.0
+   do i=2,n_rho_grid-1
+     error_rho(i) = (n_alpha_tran_0_rho(i)-n_alpha_tran_p_rho(i))/n_alpha_tran_p_rho(i)
+     error_f_rho(i) = (D_alpha(i) - D_alpha_p(i)) / D_alpha_p(i)
+     error = error +  error_rho(i)**2
+     error_f = error_f + error_f_rho(i)**2
+   enddo
+   error=sqrt(error/float(n_rho_grid-2))
+   error_f=sqrt(error_f/float(n_rho_grid-2))
+   error_check = error
+ 
+  
+ 
+!  write(3,*) 'ii=',ii,'D_TAE=',D_TAE,'error=',error,error_rho(2),error_rho(25)
+   write(3,*) 'ii=',ii,'D_TAE=',D_TAE,'error=',error,error_f,error_f_rho(25)
+
+! JBL 08/31/26 debug 
+   if (mod(ii,100) .eq. 0) then
+     write(12,*) 'ii=', ii
+     do i=1,n_rho_grid
+       write(12,*) rho_hat(i), D_alpha(i), error_f_rho(i)
+     enddo
+   endif
+
+   n_alpha_tran_rho(:) = relax*n_alpha_tran_rho(:)+(1.-relax)*n_alpha_tran_p_rho(:)
+
+   i = mod((ii-1),100) + 1
+   n_alpha_tran_accum_rho(:,i) = n_alpha_tran_rho(:)
+!   n_alpha_tran_rho(:) = 0.0
+!   do i=1,100
+!     n_alpha_tran_rho(:) = n_alpha_tran_rho(:) + n_alpha_tran_accum_rho(:,i)
+!   enddo
+!   n_alpha_tran_rho(:) = n_alpha_tran_rho(:)/100.
+
+!   do i=1,n_rho_grid-1
+!    n_alpha_tran_rho(i) = relax*n_alpha_tran_rho(i)+(1.-relax)*n_alpha_tran_p_rho(i)
+!   enddo
+
+!---- Coding for adaptive D_TAE      EMB 3-2021
+!  error_rho_max = maxval(error_rho)
+  if (adapt_D_TAE_flag .eq. 1) then
+!    if (x_switch .gt. 0.5) then
+!      x_switch = max(0.0,1.0*floor(1.0+1.0E-4-error))
+!    else
+!      x_switch = max(0.0,1.0*floor(1.0+1.0E-5-error))
+!    endif
+!    D_TAE = D_TAE * (1.0 + x_switch*0.0001*max(1.0,1.0E-5/error))  
+!    D_TAE = D_TAE * (1.0 + 0.001*(1.0E-5-error))
+    D_TAE = D_TAE * max(0.999,(1.0 + alog(1.0E-3/error)))
+!    relax = relax * (1.0 - alog(max(1.0E-3/error,1.)))
+  endif
+!----
+
+! end alpha transport
+
+  if(NBI_flag .eq. 2) then
+
+! start alpha2 transport
+
+!compute n_alpha2_tran_rho gradient
+   rg_n_alpha2_tran_rho(1) = 0.
+  do i = 2,n_rho_grid-1
+    rg_n_alpha2_tran_rho(i)= -(n_alpha2_tran_rho(i+1)-n_alpha2_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
+  enddo
+   i=n_rho_grid
+    rg_n_alpha2_tran_rho(i)= -(n_alpha2_tran_rho(i)-n_alpha2_tran_rho(i-1))/rmin/(rho_hat(i)-rho_hat(i-1))
+
+!added 11.22.16
+   do i =1, n_rho_grid
+    p_alpha2_rho(i) = n_alpha2_rho(i)*T_alpha2_equiv_rho(i)*0.16022
+   enddo
+
+    rg_p_alpha2_tran_rho(1) = 0.
+   do i = 2,n_rho_grid-1
+    rg_p_alpha2_tran_rho(i) = &
+        -(n_alpha2_tran_rho(i+1)*T_alpha2_equiv_rho(i+1) &
+           -n_alpha2_tran_rho(i-1)*T_alpha2_equiv_rho(i-1))*0.16022/rmin/(rho_hat(i+1)-rho_hat(i-1))
+   enddo
+   i=n_rho_grid
+   rg_p_alpha2_tran_rho(i) = -(n_alpha2_tran_rho(i)*T_alpha2_equiv_rho(i) &
+           -n_alpha2_tran_rho(i-1)*T_alpha2_equiv_rho(i-1))*0.16022/rmin/(rho_hat(i)-rho_hat(i-1))
+!end 11.22.16
+
+
+!compute D_alpha2 with updated stiff transport
+  do i = 1,n_rho_grid
+    D_alpha2(i) = D_bkg
+
+!  start Angioni model
+    if(i_bkg_Angioni .eq. 1) then
+      if(i .ne. 1 .and. i .ne. n_rho_grid) then
+         if (l_pinch_update) then
+!        D_alpha2(i) = D_bkg_Angioni2(i)*&
+!         (1.+Angi_Pinch_fac*C_p_alpha2(i)/Rmaj_rho(i)*n_alpha2_tran_rho(i)/rg_n_alpha2_tran_rho(i))
+!!!!!02.03.16         if(Angi_negative .eq. 1) D_alpha2(i) = abs(D_alpha2(i))
+!02.04.16AM
+          pinch_check = Angi_Pinch_fac*C_p_alpha2(i)/Rmaj_rho(i)*n_alpha2_tran_rho(i)/rg_n_alpha2_tran_rho(i)
+          if ((pinch_check .lt. -0.9) .and. (Angi_negative .eq. 1)) then
+            pinch_check = -0.9  
+            print *, 'Iteration:', ii, '  Gridpoint:', i, '    | Pinch constrained to keep D_bkg_2 > 0'
+          endif
+          D_alpha2(i) = D_bkg_Angioni2(i)*(1.+pinch_check)
+        else ! No pinch update
+          D_alpha2(i) = D_bkg_Angioni2(i)
+        endif
+      endif ! Not grid endpoints
+    endif
+!  end Angioni model
+
+    if(i_tot_TAE .eq. 0) then
+      if (rg_n_alpha2_tran_rho(i) .gt. rg_n_alpha2_th_rho(i)) D_alpha2(i) = D_alpha2(i) + &
+                   D_TAE*(rg_n_alpha2_tran_rho(i)-rg_n_alpha2_th_rho(i))*rmin/n_alpha2_rho(i)
+    endif
+    if(i_tot_TAE .eq. 1) then
+      if (rg_p_alpha_tot_tran_rho(i) .gt. rg_p_alpha_tot_th_rho(i)) D_alpha2(i) = D_alpha2(i) + &
+                   D_TAE*(rg_p_alpha_tot_tran_rho(i)-rg_p_alpha_tot_th_rho(i))*rmin/p_alpha_tot_rho(i)
+    endif
+    if(i_tot_TAE .eq. -1) then  !11.22.16
+     if (rg_p_alpha2_tran_rho(i) .gt. rg_p_alpha2_th_rho(i)) D_alpha2(i) = D_alpha2(i) + &
+                   D_TAE*(rg_p_alpha2_tran_rho(i)-rg_p_alpha2_th_rho(i))*rmin/p_alpha2_rho(i)
+    endif
+
+  enddo
+   if(i_bkg_Angioni .eq. 1) then
+    D_alpha2(1) = D_alpha2(2)
+    D_alpha2(n_rho_grid) =D_alpha2(n_rho_grid-1)
+   endif
+
+
+!save previous n_alpha_tran_rho & rg_n_alpha_tran_rho profiles
+     n_alpha2_tran_p_rho(:) = n_alpha2_tran_rho(:)
+     rg_n_alpha2_tran_p_rho(:) = rg_n_alpha2_tran_rho(:)  !fixed harmless error 8.22.13
+
+
+!compute flux   
+!!!!     flux2_rho(1)=0.
+!!!!     do i=2,n_rho_grid
+!!!!      flux2_rho(i) = V_prime_rho(i-1)/V_prime_rho(i)*flux2_rho(i-1) + 0.5*dr/V_prime_rho(i)*&
+!!!!         (V_prime_rho(i)*S02_rho(i)*(1.0 - SDsink*n_alpha2_tran_rho(i)/n_alpha2_rho(i)) + &
+!!!!           V_prime_rho(i-1)*S02_rho(i-1)*(1.0 - SDsink*n_alpha2_tran_rho(i-1)/n_alpha2_rho(i-1)))
+!!!!     enddo
+
+     do i=1,n_rho_grid
+      net_of_sink2(i) = 1.0 - SDsink*n_alpha2_tran_rho(i)/n_alpha2_rho(i)
+     enddo
+
+   flux2_rho(:) = 0.
+   flux2_rho(1)=0.
+     do i=2,n_rho_grid
+      flux2_rho(i) = V_prime_rho(i-1)/V_prime_rho(i)*flux2_rho(i-1) + &
+             0.5*dr_rho(i)/V_prime_rho(i)* &
+         (V_prime_rho(i)*S02_rho(i)*net_of_sink2(i) + &
+           V_prime_rho(i-1)*S02_rho(i-1)*net_of_sink2(i-1))
+     enddo
+
+
+!integrate up gradient
+     do i=n_rho_grid-1,1,-1
+       n_alpha2_tran_rho(i)=n_alpha2_tran_rho(i+1)+dr_rho(i)*(flux2_rho(i)+flux2_rho(i+1))/&
+                                                    (D_alpha2(i)+D_alpha2(i+1))
+     enddo
+
+  !compute convergence error
+
+!  write(3,*) 'ii   error  error_rho(1)  error_rho(25)'
+   error2=0
+   do i=1,n_rho_grid-1
+    error2_rho(i) = (n_alpha2_tran_rho(i)-n_alpha2_tran_p_rho(i))/n_alpha2_tran_p_rho(i)
+    error2 = error2 +  error2_rho(i)**2
+   enddo
+   error2=sqrt(error2/float(n_rho_grid-1))
+
+
+
+  write(3,*) 'ii=',ii,'error2=',error2,error2_rho(1),error2_rho(25)
+
+   do i=1,n_rho_grid-1
+    n_alpha2_tran_rho(i) = relax*n_alpha2_tran_rho(i)+(1.-relax)*n_alpha2_tran_p_rho(i)
+   enddo
+
+
+   endif !NBI_flag = 2
+
+!  end alpha2  transport
+
+  enddo !ii loop
+
+
+  endif !i_dn_up=0
+
+!---------------------------------------------------------------------------'
+!  finish write
+!---------------------------------------------------------------------------'
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished transported alpha density profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha density in 10**19 1/m**3'
+  do i = 1,n_rho_grid
+   write(3,*) n_alpha_tran_rho(i)
+  enddo
+
+!4.13.15
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished transported alpha pressure profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha presure in 10**4 N/m**2'
+  do i = 1,n_rho_grid
+   p_alpha_tran_rho(i) = n_alpha_tran_rho(i)*T_alpha_equiv_rho(i)*0.16022
+    write(3,*) p_alpha_tran_rho(i)
+  enddo
+!4.13.15
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished flow of alpha density profile'
+  write(3,*) '--------------------------------------------------------------'
+  open(unit=11, file='alpha_flow.out', status='replace')
+  write(3,*) 'alpha flow in [10**19 1/m**3]*[m/sec]*m**2'
+  write(11,*) 'alpha flow in [10**19 1/m**3]*[m/sec]*m**2'
+  do i = 1,n_rho_grid
+   write(3,*) flux_rho(i)*V_prime_rho(i)
+   write(11,*) flux_rho(i)*V_prime_rho(i)
+  enddo
+  flux_rho_1_final(:) = flux_rho(:)
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished transported alpha density gradient profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha density in 10**19 1/m**3*1/m'
+  do i = 1,n_rho_grid
+   write(3,*) rg_n_alpha_tran_rho(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished transported alpha pressure gradient profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha pressure  gradient in 10**4 N/m**2/m'
+
+  
+  do i = 2,n_rho_grid-1
+      rg_p_alpha_tran_rho(i) = -(p_alpha_tran_rho(i+1) -p_alpha_tran_rho(i-1))/ &
+                                      rmin/(rho_hat(i+1)-rho_hat(i-1))
+  enddo
+  rg_p_alpha_tran_rho(1) = 0.0
+  i=n_rho_grid
+     rg_p_alpha_tran_rho(i) = -(p_alpha_tran_rho(i) -p_alpha_tran_rho(i-1))/ &
+                                      rmin/(rho_hat(i)-rho_hat(i-1))
+  do i=1,n_rho_grid
+   write(3,*)  rg_p_alpha_tran_rho(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  if (l_critgrad_method .ne. 2) then
+    write(3,*) 'threshold alpha density gradient profile'
+    write(3,*) 'rg_n_alpha_th_rho(25)=',rg_n_alpha_th_rho(25)
+    write(3,*) '--------------------------------------------------------------'
+    do i = 1,n_rho_grid
+      write(3,*) rg_n_alpha_th_rho(i)
+    enddo
+  else
+    write(3,*) 'threshold alpha pressure gradient profile'
+    write(3,*) 'rg_p_alpha_th_rho(25)=',rg_p_alpha_th_rho(25)
+    write(3,*) '--------------------------------------------------------------'
+    do i = 1,n_rho_grid
+      write(3,*) rg_p_alpha_th_rho(i)
+    enddo
+  endif
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished D_alpha'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'D_alpha in m**2/sec'
+  do i = 1,n_rho_grid
+   write(3,*) D_alpha(i)
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'source flow'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'in [10**19 1/m**3]*[m/sec]*m**2'
+  do i = 1,n_rho_grid
+   write(3,*) flux_source_rho(i)*V_prime_rho(i) 
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'source energy flow'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'in MW'
+! 1 X [10**19 1/m**3]*[m/sec]*m**2 
+!    X [1.6022 10**(-19) Coul] X 0.001kAmp X 1000.MV = MW
+  do i = 1,n_rho_grid
+   write(3,*) flux_source_rho(i)*V_prime_rho(i)*1.6022*E_alpha
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+!renormed source flux 
+     renormed_flux_source_rho(1)=0.
+     do i=2,n_rho_grid
+      renormed_flux_source_rho(i) = &
+        V_prime_rho(i-1)/V_prime_rho(i)*renormed_flux_source_rho(i-1) + 0.5*dr_rho(i)/V_prime_rho(i)*&
+         (V_prime_rho(i)*S0_rho(i)*n_alpha_tran_rho(i)/n_alpha_rho(i) + &
+           V_prime_rho(i-1)*S0_rho(i-1)*n_alpha_tran_rho(i-1)/n_alpha_rho(i-1))
+     enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'renormed source flow'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'in [10**19 1/m**3]*[m/sec]*m**2'
+  do i = 1,n_rho_grid
+   write(3,*) renormed_flux_source_rho(i)*V_prime_rho(i)
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'check alpha flow'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'in [10**19 1/m**3]*[m/sec]*m**2'
+  do i = 1,n_rho_grid
+   write(3,*) (flux_source_rho(i)-renormed_flux_source_rho(i))*V_prime_rho(i)
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'source'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'in [10**19 1/m**3]/sec'
+  do i = 1,n_rho_grid
+   write(3,*) S0_rho(i)
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'renormed source'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'in [10**19 1/m**3]/sec'
+  do i = 1,n_rho_grid
+   write(3,*) S0_rho(i)*n_alpha_tran_rho(i)/n_alpha_rho(i)
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+ 
+!---------------------------------------------------------------------------'
+!  start   write finished alpha2
+!---------------------------------------------------------------------------'
+
+  if(NBI_flag .eq. 2) then
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished transported alpha2 density profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2 density in 10**19 1/m**3'
+  do i = 1,n_rho_grid
+   write(3,*) n_alpha2_tran_rho(i)
+  enddo
+
+!4.13.15
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished transported alpha2 pressure profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2 presure in 10**4 N/m**2'
+  do i = 1,n_rho_grid
+   p_alpha2_tran_rho(i) = n_alpha2_tran_rho(i)*T_alpha2_equiv_rho(i)*0.16022
+   write(3,*)  p_alpha2_tran_rho(i)
+  enddo
+!4.13.15
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished flow of alpha2 density profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2 flow in [10**19 1/m**3]*[m/sec]*m**2'
+  do i = 1,n_rho_grid
+   write(3,*) flux2_rho(i)*V_prime_rho(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished transported alpha2 density gradient profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2 density in 10**19 1/m**3*1/m'
+  do i = 1,n_rho_grid
+   write(3,*) rg_n_alpha2_tran_rho(i)
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'threshold alpha2 density gradient profile'
+  write(3,*) 'rg_n_alpha2_th_rho(25)=',rg_n_alpha2_th_rho(25)
+  write(3,*) '--------------------------------------------------------------'
+  do i = 1,n_rho_grid
+   write(3,*) rg_n_alpha2_th_rho(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished transported alpha2 pressure gradient profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha2 pressure gradient in 10**4 N/m**2/m'
+  write(3,*) '--------------------------------------------------------------'
+
+  do i = 2,n_rho_grid-1
+      rg_p_alpha2_tran_rho(i) = -(p_alpha2_tran_rho(i+1) -p_alpha2_tran_rho(i-1))/ &
+                                      rmin/(rho_hat(i+1)-rho_hat(i-1))
+  enddo
+  rg_p_alpha_tran_rho(1) = 0.0
+  i=n_rho_grid
+     rg_p_alpha2_tran_rho(i) = -(p_alpha2_tran_rho(i) -p_alpha2_tran_rho(i-1))/ &
+                                      rmin/(rho_hat(i)-rho_hat(i-1))
+
+  do i=1,n_rho_grid
+   write(3,*)  rg_p_alpha2_tran_rho(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished transported alpha_tot pressure gradient profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'alpha_tot pressure gradient in 10**4 N/m**2/m'
+
+
+  do i=1,n_rho_grid
+   write(3,*)  rg_p_alpha_tran_rho(i)+rg_p_alpha2_tran_rho(i)
+  enddo
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished D_alpha2'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'D_alpha in m**2/sec'
+  do i = 1,n_rho_grid
+   write(3,*) D_alpha2(i)
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'source2 flow'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'in [10**19 1/m**3]*[m/sec]*m**2'
+  do i = 1,n_rho_grid
+   write(3,*) flux2_source_rho(i)*V_prime_rho(i)
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'source2 energy flow'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'in MW'
+! 1 X [10**19 1/m**3]*[m/sec]*m**2 
+!    X [1.6022 10**(-19) Coul] X 0.001kAmp X 1000.MV = MW
+  do i = 1,n_rho_grid
+   write(3,*) flux2_source_rho(i)*V_prime_rho(i)*1.6022*E_alpha2
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+!renormed source flux 
+     renormed_flux2_source_rho(1)=0.
+     do i=2,n_rho_grid
+      renormed_flux2_source_rho(i) = &
+        V_prime_rho(i-1)/V_prime_rho(i)*renormed_flux2_source_rho(i-1) + 0.5*dr_rho(i)/V_prime_rho(i)*&
+         (V_prime_rho(i)*S02_rho(i)*n_alpha2_tran_rho(i)/n_alpha2_rho(i) + &
+           V_prime_rho(i-1)*S02_rho(i-1)*n_alpha2_tran_rho(i-1)/n_alpha2_rho(i-1))
+     enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'renormed source2 flow'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'in [10**19 1/m**3]*[m/sec]*m**2'
+  do i = 1,n_rho_grid
+   write(3,*) renormed_flux2_source_rho(i)*V_prime_rho(i)
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'check alpha2 flow'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'in [10**19 1/m**3]*[m/sec]*m**2'
+  do i = 1,n_rho_grid
+   write(3,*) (flux2_source_rho(i)-renormed_flux2_source_rho(i))*V_prime_rho(i)
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'source2'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'in [10**19 1/m**3]/sec'
+  do i = 1,n_rho_grid
+   write(3,*) S02_rho(i)
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'renormed source2'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'in [10**19 1/m**3]/sec'
+  do i = 1,n_rho_grid
+   write(3,*) S02_rho(i)*n_alpha2_tran_rho(i)/n_alpha2_rho(i)
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+
+  endif  !NBI_flag =2
+
+!---------------------------------------------------------------------------'
+! end  write finished alpha2
+!---------------------------------------------------------------------------'
+
+  if(i_He_tran .eq. 1) then
+
+!8.22.13  start He transport based on renormed source
+!         could do this is pass  with a direct integration  since the renormed source is fixed
+
+  if (i_dn_up .eq. 0) then
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'starting He density profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'in [10**19 1/m**3]'
+  do i = 1,n_rho_grid
+   write(3,*) n_He_tran_rho(i)
+  enddo
+  write(3,*) '--------------------------------------------------------------'
+
+
+
+    write(3,*) 'ii   error  error_rho(1)  error_rho(25)'
+
+
+    do ii=1,n_up_loop  !He transport loop
+
+
+!compute n_He_tran_rho gradient
+   rg_n_He_tran_rho(1) = 0.
+  do i = 2,n_rho_grid-1
+    rg_n_He_tran_rho(i)= -(n_He_tran_rho(i+1)-n_He_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
+  enddo
+   i=n_rho_grid
+    rg_n_He_tran_rho(i)= -(n_He_tran_rho(i)-n_He_tran_rho(i-1))/rmin/(rho_hat(i)-rho_hat(i-1))
+
+!compute D_He with updated  Angioni pinched He transport
+  do i = 1,n_rho_grid
+!    D_He(i) = D_bkg
+!8.30.13
+     D_He(i) =chi_eff(i)
+
+!  start Angioni model
+    if(i_bkg_Angioni .eq. 1) then
+      if(i .ne. 1 .and. i .ne. n_rho_grid) then
+      D_He(i) = D_bkg_Angioni_He(i)*&
+       (1.+C_p_He(i)/Rmaj_rho(i)*n_He_tran_rho(i)/rg_n_He_tran_rho(i))
+      endif
+    endif
+!  end Angioni model
+
+  enddo
+   if(i_bkg_Angioni .eq. 1) then
+    D_He(1) = D_He(2)
+    D_He(n_rho_grid) =D_He(n_rho_grid-1)
+   endif
+
+
+!save previous n_He_tran_rho & rg_n_alpha_tran_rho profiles
+     n_He_tran_p_rho(:) = n_He_tran_rho(:)
+     rg_n_He_tran_p_rho(:) = rg_n_He_tran_rho(:)
+
+
+!compute flux  !no need to repete for He  since renormed source does not change
+     flux_rho(1)=0.
+     do i=2,n_rho_grid
+      flux_rho(i) = V_prime_rho(i-1)/V_prime_rho(i)*flux_rho(i-1) + 0.5*dr_rho(i)/V_prime_rho(i)*&
+         (V_prime_rho(i)*S0_rho(i)*n_alpha_tran_rho(i)/n_alpha_rho(i) + &
+           V_prime_rho(i-1)*S0_rho(i-1)*n_alpha_tran_rho(i-1)/n_alpha_rho(i-1))
+     enddo
+
+
+!integrate up gradient
+     do i=n_rho_grid-1,1,-1
+       n_He_tran_rho(i)=n_He_tran_rho(i+1)+dr_rho(i)*(flux_rho(i)+flux_rho(i+1))/&
+                                                    (D_He(i)+D_He(i+1))
+     enddo
+
+  !compute convergence error
+
+!  write(3,*) 'ii   error  error_rho(1)  error_rho(25)'
+   error=0
+   do i=1,n_rho_grid-1
+    error_rho(i) = (n_He_tran_rho(i)-n_He_tran_p_rho(i))/n_He_tran_p_rho(i)
+    error = error +  error_rho(i)**2
+   enddo
+   error=sqrt(error/float(n_rho_grid-1))
+
+
+
+  write(3,*) 'ii=',ii,'error=',error,error_rho(1),error_rho(25)
+
+   do i=1,n_rho_grid-1
+    n_He_tran_rho(i) = relax*n_He_tran_rho(i)+(1.-relax)*n_He_tran_p_rho(i)
+   enddo
+
+
+  enddo !ii loop  He
+
+
+  endif !i_dn_up=0
+
+  endif ! i_He_tran
+
+  if(i_He_tran .eq. 2) then
+!compute flux  !no need to repete for He  since renormed source does not change
+     flux_rho(1)=0.
+     do i=2,n_rho_grid
+      flux_rho(i) = V_prime_rho(i-1)/V_prime_rho(i)*flux_rho(i-1) + 0.5*dr_rho(i)/V_prime_rho(i)*&
+         (V_prime_rho(i)*S0_rho(i)*n_alpha_tran_rho(i)/n_alpha_rho(i) + &
+           V_prime_rho(i-1)*S0_rho(i-1)*n_alpha_tran_rho(i-1)/n_alpha_rho(i-1))
+     enddo
+!direct up gradient one pass solution
+
+     n_He_tran_rho(n_rho_grid) = 0.
+
+     n_He_tran_rho(n_rho_grid-1)=((flux_rho(n_rho_grid)/D_bkg_Angioni_He(n_rho_grid) &
+                                 +flux_rho(n_rho_grid-1)/D_bkg_Angioni_He(n_rho_grid-1))/2. &
+                                   *(rho_hat(n_rho_grid)-rho_hat(n_rho_grid-1))*rmin)/ &
+           (1.+C_p_He(n_rho_grid-1)*(rho_hat(n_rho_grid)-rho_hat(n_rho_grid-1))*rmin/Rmaj_rho(n_rho_grid-1))
+
+     write(3,*) 'n_He_tran_rho(n_rho_grid-1)=',n_He_tran_rho(n_rho_grid-1)
+
+     do i = n_rho_grid-1,2,-1
+      n_He_tran_rho(i-1) = n_He_tran_rho(i+1)  &
+          -n_He_tran_rho(i)*C_p_He(i)/Rmaj_rho(i)*(rho_hat(i+1)-rho_hat(i-1))*rmin &
+          +flux_rho(i)/D_bkg_Angioni_He(i)*(rho_hat(i+1)-rho_hat(i-1))*rmin
+     enddo
+
+!compute n_He_tran_rho gradient
+   rg_n_He_tran_rho(1) = 0.000001
+  do i = 2,n_rho_grid-1
+    rg_n_He_tran_rho(i)= -(n_He_tran_rho(i+1)-n_He_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
+  enddo
+   i=n_rho_grid
+    rg_n_He_tran_rho(i)= -(n_He_tran_rho(i)-n_He_tran_rho(i-1))/rmin/(rho_hat(i)-rho_hat(i-1))
+
+
+   !compute D_He with updated  Angioni pinched He transport
+  do i = 1,n_rho_grid
+!    D_He(i) = D_bkg
+!8.30.13
+     D_He(i) = chi_eff(i)
+
+      
+    if(i_bkg_Angioni .eq. 1) then
+      if(i .ne. 1 .and. i .ne. n_rho_grid) then
+      D_He(i) = D_bkg_Angioni_He(i)*&
+       (1.+C_p_He(i)/Rmaj_rho(i)*n_He_tran_rho(i)/rg_n_He_tran_rho(i))
+      endif
+    endif
+  enddo
+
+  endif !i_He_tran
+
+
+
+  if(i_He_tran .gt. 0) then
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished transported He density profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'He density in 10**19 1/m**3'
+  do i = 1,n_rho_grid
+   write(3,*) n_He_tran_rho(i)
+  enddo
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished flow of He density profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'He flow in [10**19 1/m**3]*[m/sec]*m**2'
+  do i = 1,n_rho_grid
+   write(3,*) flux_rho(i)*V_prime_rho(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished transported He density gradient profile'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'He density in 10**19 1/m**3*1/m'
+  do i = 1,n_rho_grid
+   write(3,*) rg_n_He_tran_rho(i)
+  enddo
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished He diffusivity in m**2/sec profile'
+  write(3,*) '--------------------------------------------------------------'
+  do i = 1,n_rho_grid
+   write(3,*) D_He(i)
+  enddo
+
+    if(i_He_tran .eq. 2) then
+
+!compute flux  !no need to repete for He  since renormed source does not change
+     flux_rho(1)=0.
+     do i=2,n_rho_grid
+      flux_rho(i) = V_prime_rho(i-1)/V_prime_rho(i)*flux_rho(i-1) + 0.5*dr_rho(i)/V_prime_rho(i)*&
+         (V_prime_rho(i)*S0_rho(i)*n_alpha_tran_rho(i)/n_alpha_rho(i) + &
+           V_prime_rho(i-1)*S0_rho(i-1)*n_alpha_tran_rho(i-1)/n_alpha_rho(i-1))
+     enddo
+!direct up gradient one pass solution
+
+     n_He_tran_p_rho(n_rho_grid) = 0.
+
+     n_He_tran_p_rho(n_rho_grid-1)=((flux_rho(n_rho_grid)/D_bkg_Angioni_He(n_rho_grid) &
+                                 +flux_rho(n_rho_grid-1)/D_bkg_Angioni_He(n_rho_grid-1))/2. &
+                                   *(rho_hat(n_rho_grid)-rho_hat(n_rho_grid-1))*rmin) 
+
+
+     do i = n_rho_grid-1,2,-1
+      n_He_tran_p_rho(i-1) = n_He_tran_p_rho(i+1)  &
+          +flux_rho(i)/D_bkg_Angioni_He(i)*(rho_hat(i+1)-rho_hat(i-1))*rmin
+     enddo
+
+
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'finished transported He density profile without pinch'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'He density in 10**19 1/m**3'
+  do i = 1,n_rho_grid
+   write(3,*) n_He_tran_p_rho(i)
+  enddo
+
+
+    endif ! i_He_tran=2  unpinched
+
+
+  endif ! i_He_tran
+     
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'Diagnostic: E_alpha profile solved from effective temperature'
+  write(3,*) 'Re-solve only when experimental effective temperature given'
+  write(3,*) '--------------------------------------------------------------'
+  write(3,*) 'E_alpha_rho in MeV vs. input E_alpha =', E_alpha
+  do i = 1,n_rho_grid
+   write(3,*) E_alpha_rho(i)
+  enddo
+
+    close(3)
+
+  open(unit=3,file='D_alpha.out',status='replace')
+  write(3,*) 'Diffusion coefficient for EP species 1 (natural normalization) in m^2/s'
+  do i = 1,n_rho_grid
+   write(3,*) D_alpha(i)
+  enddo
+  write(3,*) error_check, '  : relative error in solution'
+  close(3)
+
+  open(unit=3,file='D_alpha_ITER.out',status='replace')
+  write(3,*) 'Diffusion coefficient for EP species 1 (ITER normalization) in m^2/s'
+  do i = 1,n_rho_grid
+   write(3,*) D_alpha(i)*2*kappa_rho(i)**2/(1+kappa_rho(i)**2)
+  enddo
+  write(3,*) error_check, '  : relative error in solution'
+  close(3)
+
+  if (l_read_exp_profile .eq. 1) then
+    flow_factor(2:n_rho_grid) = (flux_source_rho(2:n_rho_grid)-flux_rho_1_final(2:n_rho_grid))/flux_source_rho(2:n_rho_grid)
+    flow_factor(1) = flow_factor(2)     !  Avoid division by zero at center
+!    print *, flow_factor(:)
+    power_factor(:) = n_alpha_tran_rho(:)/n_alpha_rho(:)  ! Denominator is SD density because TGYRO re-
+                                                          ! sets qfuse, qfusi to classical
+    expro_qfuse(:) = expro_qfuse(:)*power_factor(:)       ! input.gacode columns are power
+    expro_qfusi(:) = expro_qfusi(:)*power_factor(:)       ! not flow
+    expro_ni(i_EP,:) = n_alpha_tran_rho(:)
+    expro_ni(i_EP,n_rho_grid) = 1.0E-10     ! tgyro needs finite value for zero boundary
+    if (source_write_flag .eq.1) expro_qpar_beam(:) = 1.E19*S0_rho(:)
+    call expro_write('input.gacode.out')
+  endif
+
+end subroutine Alpha_transport

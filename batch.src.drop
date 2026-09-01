@@ -1,0 +1,11 @@
+#$ -N current
+#$ -o batch.out
+#$ -e batch.err
+#$ -pe mpi 1
+#$ -S /bin/bash
+#$ -V
+#$ -q all.q
+#$ -cwd
+
+mpirun -np 1 -env MV2_ENABLE_AFFINITY 0 ./Alpha_driver
+

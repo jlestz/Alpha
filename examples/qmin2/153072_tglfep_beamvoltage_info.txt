@@ -1,0 +1,14 @@
+Shot:       153072
+Averaged over:      400 ms
+Center time:     3300 ms
+nbvac30lt Voltage:      81265.4V Power:  1.80836e+06 W
+nbvac30rt Voltage:      76849.2V Power:  1.24229e+06 W
+nbvac15lt Voltage:      0.00000V Power:      0.00000 W
+nbvac15rt Voltage:      81241.6V Power:  1.82781e+06 W
+nbvac21lt Voltage:      0.00000V Power:      0.00000 W
+nbvac21rt Voltage:      81247.7V Power:      211718. W
+nbvac33lt Voltage:      81425.8V Power:  1.91418e+06 W
+nbvac33rt Voltage:      81211.8V Power:  2.11529e+06 W
+Power weighted avg. full energy=      80679.9 V
+Power weighted avg. energy with all energy fractions=      68994.3 V
+Total Avg. Power=  9.11964e+06 W
