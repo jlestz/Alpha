@@ -501,18 +501,10 @@ subroutine Alpha_transport
 !special BC 
     n_alpha_tran_rho(n_rho_grid) = delta1*n_alpha_rho(n_rho_grid)
 
-!  same 5-point stencil as the in-loop calculation below, so 'Initial'
-!  and 'Relaxed' outputs stay a fair, apples-to-apples comparison.
    rg_n_alpha_tran_rho(1) = 0.
-   i = 2
+  do i = 2,n_rho_grid-1
     rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i+1)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
-  do i = 3,n_rho_grid-2
-    rg_n_alpha_tran_rho(i)= -(-n_alpha_tran_rho(i+2)+8.*n_alpha_tran_rho(i+1) &
-                              -8.*n_alpha_tran_rho(i-1)+n_alpha_tran_rho(i-2)) &
-                              /rmin/(6.*(rho_hat(i+1)-rho_hat(i-1)))
   enddo
-   i = n_rho_grid-1
-    rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i+1)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
    i=n_rho_grid
     rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i)-rho_hat(i-1))
 !end starting n_alpha_tran_rho solution  
@@ -1270,24 +1262,10 @@ subroutine Alpha_transport
 
 
 !compute n_alpha_tran_rho gradient
-!  5-point (4th-order) symmetric stencil: like the original 3-point
-!  centered difference, this is exactly blind to a pure grid-to-grid
-!  (Nyquist) checkerboard mode -- required algebraically of any
-!  symmetric, consistent 3-point-or-wider stencil -- but has a sharper
-!  rolloff approaching that frequency, damping near-Nyquist content
-!  more than the original 3-point version did.
-!  Falls back to the original 3-point centered formula at i=2 and
-!  i=n_rho_grid-1, where the 5-point stencil can't reach i-2/i+2.
    rg_n_alpha_tran_rho(1) = 0.
-   i = 2
+  do i = 2,n_rho_grid-1
     rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i+1)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
-  do i = 3,n_rho_grid-2
-    rg_n_alpha_tran_rho(i)= -(-n_alpha_tran_rho(i+2)+8.*n_alpha_tran_rho(i+1) &
-                              -8.*n_alpha_tran_rho(i-1)+n_alpha_tran_rho(i-2)) &
-                              /rmin/(6.*(rho_hat(i+1)-rho_hat(i-1)))
   enddo
-   i = n_rho_grid-1
-    rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i+1)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i+1)-rho_hat(i-1))
    i=n_rho_grid
     rg_n_alpha_tran_rho(i)= -(n_alpha_tran_rho(i)-n_alpha_tran_rho(i-1))/rmin/(rho_hat(i)-rho_hat(i-1))
 
@@ -1296,26 +1274,12 @@ subroutine Alpha_transport
     p_alpha_rho(i) = n_alpha_rho(i)*T_alpha_equiv_rho(i)*0.16022
    enddo
 
-!  same 5-point stencil as rg_n_alpha_tran_rho, applied to the n*T
-!  product -- keeps the pressure branch (i_tot_TAE=-1) on equal footing
-!  with the density branch (i_tot_TAE=0).
     rg_p_alpha_tran_rho(1) = 0.
-   i = 2
+   do i = 2,n_rho_grid-1
     rg_p_alpha_tran_rho(i) = &
         -(n_alpha_tran_rho(i+1)*T_alpha_equiv_rho(i+1) &
            -n_alpha_tran_rho(i-1)*T_alpha_equiv_rho(i-1))*0.16022/rmin/(rho_hat(i+1)-rho_hat(i-1))
-  do i = 3,n_rho_grid-2
-    rg_p_alpha_tran_rho(i) = &
-        -( -n_alpha_tran_rho(i+2)*T_alpha_equiv_rho(i+2) &
-           +8.*n_alpha_tran_rho(i+1)*T_alpha_equiv_rho(i+1) &
-           -8.*n_alpha_tran_rho(i-1)*T_alpha_equiv_rho(i-1) &
-           +n_alpha_tran_rho(i-2)*T_alpha_equiv_rho(i-2) ) &
-           *0.16022/rmin/(6.*(rho_hat(i+1)-rho_hat(i-1)))
    enddo
-   i = n_rho_grid-1
-    rg_p_alpha_tran_rho(i) = &
-        -(n_alpha_tran_rho(i+1)*T_alpha_equiv_rho(i+1) &
-           -n_alpha_tran_rho(i-1)*T_alpha_equiv_rho(i-1))*0.16022/rmin/(rho_hat(i+1)-rho_hat(i-1))
    i=n_rho_grid
    rg_p_alpha_tran_rho(i) = -(n_alpha_tran_rho(i)*T_alpha_equiv_rho(i) &
            -n_alpha_tran_rho(i-1)*T_alpha_equiv_rho(i-1))*0.16022/rmin/(rho_hat(i)-rho_hat(i-1))
