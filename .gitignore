@@ -1,0 +1,6 @@
+*.o
+*.mod
+Alpha_lib.a
+Alpha_driver
+*.out
+Alpha_convergence_trace.out
