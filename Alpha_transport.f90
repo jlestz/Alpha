@@ -1364,10 +1364,6 @@ subroutine Alpha_transport
 !  The recursion sets  n(i)-n(i+1) = dr*flux_half(i)/D_half(i), so D_half
 !  is the only way D enters the transport solution.
 !  ---------------------------------------------------------------------
-   do i = 1,n_rho_grid-1
-     D_half(i) = 0.5*(D_alpha(i)+D_alpha(i+1))
-   enddo
-
    if ((l_D_interface .eq. 1) .and. (i_bkg_Angioni .eq. 0)) then
 
 !    Interface-consistent closure. The point-based scheme above evaluates
@@ -1420,6 +1416,15 @@ subroutine Alpha_transport
        D_alpha(i) = 0.5*(D_half(i-1)+D_half(i))
      enddo
      D_alpha(n_rho_grid) = D_half(n_rho_grid-1)
+
+   else
+
+!    Original point-based path. The interface value is the average of the
+!    two adjacent point values, so 2*D_half(i) in the recursion below is
+!    algebraically identical to the original (D_alpha(i)+D_alpha(i+1)).
+     do i = 1,n_rho_grid-1
+       D_half(i) = 0.5*(D_alpha(i)+D_alpha(i+1))
+     enddo
 
    endif
 
