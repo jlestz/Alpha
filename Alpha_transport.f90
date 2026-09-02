@@ -49,10 +49,6 @@ subroutine Alpha_transport
      real :: delta1
      real :: D_bkg
      real :: D_TAE
-     real :: smooth_frac
-     real :: smooth_width
-     real :: excess
-     real :: smooth_response
      real :: dr
      real, dimension(n_rho_grid) :: dr_rho
      real :: lag_rhs
@@ -1319,37 +1315,17 @@ subroutine Alpha_transport
     endif
 !  end Angioni model
 
-!  smoothed critical-gradient response (see commit message / conversation
-!  for rationale) -- replaces the hard on/off switch with a continuous
-!  ramp over a small transition width, scaled to the local threshold.
-    smooth_frac = 0.02
     if(i_tot_TAE .eq. 0) then
-     excess = rg_n_alpha_tran_rho(i) - rg_n_alpha_th_rho(i)
-     smooth_width = smooth_frac*rg_n_alpha_th_rho(i)
-     if (excess .le. -smooth_width) then
-       smooth_response = 0.
-     else if (excess .ge. smooth_width) then
-       smooth_response = excess
-     else
-       smooth_response = (excess+smooth_width)**2 / (4.*smooth_width)
-     endif
-     D_alpha(i) = D_alpha(i) + D_TAE*smooth_response*rmin/n_alpha_rho(i)
+     if (rg_n_alpha_tran_rho(i) .gt. rg_n_alpha_th_rho(i)) D_alpha(i) = D_alpha(i) + &
+                   D_TAE*(rg_n_alpha_tran_rho(i)-rg_n_alpha_th_rho(i))*rmin/n_alpha_rho(i)
     endif
     if(i_tot_TAE .eq. 1) then
       if (rg_p_alpha_tot_tran_rho(i) .gt. rg_p_alpha_tot_th_rho(i)) D_alpha(i) = D_alpha(i) + &
                    D_TAE*(rg_p_alpha_tot_tran_rho(i)-rg_p_alpha_tot_th_rho(i))*rmin/p_alpha_tot_rho(i)
     endif
     if(i_tot_TAE .eq. -1) then  !11.22.16
-     excess = rg_p_alpha_tran_rho(i) - rg_p_alpha_th_rho(i)
-     smooth_width = smooth_frac*rg_p_alpha_th_rho(i)
-     if (excess .le. -smooth_width) then
-       smooth_response = 0.
-     else if (excess .ge. smooth_width) then
-       smooth_response = excess
-     else
-       smooth_response = (excess+smooth_width)**2 / (4.*smooth_width)
-     endif
-     D_alpha(i) = D_alpha(i) + D_TAE*smooth_response*rmin/p_alpha_rho(i)
+     if (rg_p_alpha_tran_rho(i) .gt. rg_p_alpha_th_rho(i)) D_alpha(i) = D_alpha(i) + &
+                   D_TAE*(rg_p_alpha_tran_rho(i)-rg_p_alpha_th_rho(i))*rmin/p_alpha_rho(i)
     endif
 
   enddo  ! radial grid
