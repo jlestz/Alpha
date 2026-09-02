@@ -1,0 +1,125 @@
+--- Alpha_transport.f90.orig	2026-09-01 18:16:44.056614844 +0000
++++ Alpha_transport.f90	2026-09-02 05:44:32.161149649 +0000
+@@ -83,6 +83,14 @@
+      real, dimension(n_rho_grid,100) :: n_alpha_tran_accum_rho
+      real, dimension(n_rho_grid) :: D_alpha
+      real, dimension(n_rho_grid) :: D_alpha_p
++!  interface (half-grid) diffusivity: D_half(i) lives between grid
++!  points i and i+1, and is the quantity the density recursion uses.
++     real, dimension(n_rho_grid) :: D_half
++     real, dimension(n_rho_grid) :: D_half_p
++     real :: gh
++     real :: gcrit_h
++     real :: denom_h
++     integer :: l_D_interface
+      real, dimension(n_rho_grid) :: rg_n_alpha_th_rho
+      real, dimension(n_rho_grid) :: rg_n_alpha_tran_rho
+      real, dimension(n_rho_grid) :: rg_n_alpha_tran_p_rho
+@@ -258,6 +266,15 @@
+ !  relax = 0.001
+   relax_f = 0.005
+ 
++!  l_D_interface = 1 : evaluate the stiff-transport closure on the interface
++!                      (half) grid, using the one-sided gradient that the
++!                      density recursion actually controls. Removes the
++!                      grid-to-grid oscillation in the reported D_alpha.
++!  l_D_interface = 0 : original point-based closure.
++!  Automatically disabled when the Angioni pinch model is active, since
++!  that branch is only formulated on the point grid.
++  l_D_interface = 1
++
+   Q_fus = 10.  !default
+ !!!  Q_fus = 20.  !for the 2x baseline case
+ !!!  Q_fus = 20.   !Q=20 recover
+@@ -1227,6 +1244,8 @@
+ 
+     flux_rho(:) = 1.0E-5
+     D_alpha(:) = D_bkg
++    D_half(:) = D_bkg
++    D_half_p(:) = D_bkg
+ 
+     do ii=1,n_up_loop  !start iteration loop
+ 
+@@ -1335,6 +1354,70 @@
+ !    Filter grid-to-grid noise in D_alpha.
+ !   D_alpha(2:n_rho_grid-1) = (D_alpha(1:n_rho_grid-2)+2.*D_alpha(2:n_rho_grid-1)+D_alpha(3:n_rho_grid))/4.0
+ 
++!  ---------------------------------------------------------------------
++!  Interface diffusivity used by the density recursion below.
++!  The recursion sets  n(i)-n(i+1) = dr*flux_half(i)/D_half(i), so D_half
++!  is the only way D enters the transport solution.
++!  ---------------------------------------------------------------------
++   do i = 1,n_rho_grid-1
++     D_half(i) = 0.5*(D_alpha(i)+D_alpha(i+1))
++   enddo
++
++   if ((l_D_interface .eq. 1) .and. (i_bkg_Angioni .eq. 0)) then
++
++!    Interface-consistent closure. The point-based scheme above evaluates
++!    D at grid points from a centred gradient (the average of two adjacent
++!    one-sided differences), then averages adjacent D back onto the
++!    interface. That point -> interface -> point round trip leaves the
++!    difference between neighbouring D(i) unconstrained by the discrete
++!    equations, which is what produces the grid-to-grid oscillation in the
++!    reported diffusivity. Evaluating the closure directly on the interface
++!    gradient removes the round trip.
++
++     do i = 1,n_rho_grid-1
++
++       D_half_p(i) = D_half(i)
++       D_half(i) = D_bkg
++
++       if (i_tot_TAE .eq. 0) then
++         gh      = (n_alpha_tran_rho(i)-n_alpha_tran_rho(i+1)) &
++                    /rmin/(rho_hat(i+1)-rho_hat(i))
++         gcrit_h = 0.5*(rg_n_alpha_th_rho(i)+rg_n_alpha_th_rho(i+1))
++         denom_h = 0.5*(n_alpha_rho(i)+n_alpha_rho(i+1))
++       else if (i_tot_TAE .eq. -1) then
++         gh      = (n_alpha_tran_rho(i)*T_alpha_equiv_rho(i) &
++                   -n_alpha_tran_rho(i+1)*T_alpha_equiv_rho(i+1)) &
++                    *0.16022/rmin/(rho_hat(i+1)-rho_hat(i))
++         gcrit_h = 0.5*(rg_p_alpha_th_rho(i)+rg_p_alpha_th_rho(i+1))
++         denom_h = 0.5*(p_alpha_rho(i)+p_alpha_rho(i+1))
++       else
++!        i_tot_TAE = 1 (joint alpha + NBI drive) is not reformulated on the
++!        interface grid; average the point-based quantities instead. This
++!        branch therefore retains the original behaviour.
++         gh      = 0.5*(rg_p_alpha_tot_tran_rho(i)+rg_p_alpha_tot_tran_rho(i+1))
++         gcrit_h = 0.5*(rg_p_alpha_tot_th_rho(i)+rg_p_alpha_tot_th_rho(i+1))
++         denom_h = 0.5*(p_alpha_tot_rho(i)+p_alpha_tot_rho(i+1))
++       endif
++
++       if (gh .gt. gcrit_h) D_half(i) = D_half(i) &
++                            + D_TAE*(gh-gcrit_h)*rmin/denom_h
++
++     enddo
++
++     D_half(1:n_rho_grid-1) = relax_f*D_half(1:n_rho_grid-1) &
++                            + (1.-relax_f)*D_half_p(1:n_rho_grid-1)
++
++!    Map back to grid points for output and convergence diagnostics only.
++!    This does NOT feed back into the solve: D_half is recomputed from the
++!    density each iteration, so no repeated smoothing accumulates.
++     D_alpha(1) = D_half(1)
++     do i = 2,n_rho_grid-1
++       D_alpha(i) = 0.5*(D_half(i-1)+D_half(i))
++     enddo
++     D_alpha(n_rho_grid) = D_half(n_rho_grid-1)
++
++   endif
++
+ !save previous n_alpha_tran_rho & rg_n_alpha_tran_rho profiles
+      n_alpha_tran_p_rho(:) = n_alpha_tran_rho(:)
+      rg_n_alpha_tran_p_rho(:) = rg_n_alpha_tran_rho(:)  !fixed harmless error 8.22.13
+@@ -1368,9 +1451,9 @@
+ !     flux_rho(:) = relax_f*flux_rho(:) + (1.-relax_f)*flux_p_rho(:)
+      do i=n_rho_grid-1,1,-1
+        n_alpha_tran_rho(i)=n_alpha_tran_rho(i+1)+dr_rho(i)*(flux_rho(i)+flux_rho(i+1))/&
+-                                                    (D_alpha(i)+D_alpha(i+1))
++                                                    (2.*D_half(i))
+        n_alpha_tran_0_rho(i) = n_alpha_tran_rho(i+1)+dr_rho(i)*(flux_0_rho(i)+flux_0_rho(i+1))/&
+-                                                    (D_alpha(i)+D_alpha(i+1))                                     
++                                                    (2.*D_half(i))                                     
+      enddo
+ 
+   !compute convergence error
