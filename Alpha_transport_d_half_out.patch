@@ -1,0 +1,28 @@
+--- patched/Alpha_transport.f90	2026-09-03 15:57:32.499018770 +0000
++++ patched2/Alpha_transport.f90	2026-09-03 18:30:03.663919401 +0000
+@@ -2255,6 +2255,25 @@
+   write(3,*) error_check, '  : relative error in solution'
+   close(3)
+ 
++!  ---------------------------------------------------------------------
++!  Interface (staggered-grid) diffusivity, written out directly.
++!  D_half(i) lives between grid points i and i+1 and is the only way D
++!  enters the pressure solve. The grid-point output above is an average of
++!  neighbouring interface values, and that average cancels a point-to-point
++!  oscillation in D_half exactly, so a smooth D_alpha.out does not by
++!  itself establish that D_half is smooth. Decompose this file instead.
++!  Written for both schemes: with l_D_interface = 0 the entries are the
++!  averaged point values, which is still exactly what the solve uses.
++!  ---------------------------------------------------------------------
++  open(unit=3,file='D_half.out',status='replace')
++  write(3,*) 'Interface diffusivity D_half for EP species 1 in m^2/s'
++  write(3,*) 'columns: rho_half  D_half   with l_D_interface=', l_D_interface
++  do i = 1,n_rho_grid-1
++   write(3,*) 0.5*(rho_hat(i)+rho_hat(i+1)), D_half(i)
++  enddo
++  write(3,*) error_check, '  : relative error in solution'
++  close(3)
++
+   if (l_read_exp_profile .eq. 1) then
+     flow_factor(2:n_rho_grid) = (flux_source_rho(2:n_rho_grid)-flux_rho_1_final(2:n_rho_grid))/flux_source_rho(2:n_rho_grid)
+     flow_factor(1) = flow_factor(2)     !  Avoid division by zero at center
