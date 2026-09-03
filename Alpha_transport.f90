@@ -91,6 +91,10 @@ subroutine Alpha_transport
      real :: gcrit_h
      real :: denom_h
      integer :: l_D_interface
+     integer :: l_norm_const
+!  normalization profile actually used by the stiff closure;
+!  either the local reference profile or a constant (see l_norm_const)
+     real, dimension(n_rho_grid) :: p_norm_rho
      real, dimension(n_rho_grid) :: rg_n_alpha_th_rho
      real, dimension(n_rho_grid) :: rg_n_alpha_tran_rho
      real, dimension(n_rho_grid) :: rg_n_alpha_tran_p_rho
@@ -231,7 +235,8 @@ subroutine Alpha_transport
 !  D_bkg = 0.03
 !  D_bkg = 0.015 !default
 !  D_bkg = 0.05
-  D_bkg = 0.001
+  D_bkg = 0.001 ! original from Eric 
+!  D_bkg = 0.000001 ! JBL debug
 !  D_bkg = 0.045
 !  D_bkg = 0.005
 !!  D_bkg = 0.001 !no convegence with D_TAE=1.
@@ -243,7 +248,8 @@ subroutine Alpha_transport
 !!  D_TAE = 0.0   !9.23.13
 !    D_TAE = 1.0   !10.02.13    D_TAE = 3.0
 !    D_TAE = 3.0
-    D_TAE = 7.4
+!    D_TAE = 7.4 ! default from Eric
+    D_TAE = 100.0 ! JBL debug DTAE
 !     D_TAE = 1.0
 !    D_TAE = 20.
 !    D_TAE = 10.
@@ -277,6 +283,21 @@ subroutine Alpha_transport
 !  Automatically disabled when the Angioni pinch model is active, since
 !  that branch is only formulated on the point grid.
   l_D_interface = 1
+
+!  l_norm_const = 0 : original closure normalization. The excess gradient
+!                     is divided by the LOCAL fixed slowing-down reference
+!                     profile (n_alpha_rho, p_alpha_rho or p_alpha_tot_rho
+!                     according to i_tot_TAE).
+!  l_norm_const = 1 : divide by a CONSTANT instead, equal to the maximum of
+!                     that same profile over the grid. Diagnostic for the
+!                     edge diffusivity spike: the reference profile collapses
+!                     toward rho = 1 much faster than the gradient does, so
+!                     the local normalization manufactures a large normalized
+!                     excess out of a small absolute one.
+!  NOTE this is a modelling change, not a bug fix. It rescales D over the
+!  whole profile (by p_norm_local/max), not only near the edge, so the core
+!  will also sit further from marginal. Compare against l_norm_const = 0.
+  l_norm_const = 0
 
   Q_fus = 10.  !default
 !!!  Q_fus = 20.  !for the 2x baseline case
@@ -629,6 +650,8 @@ subroutine Alpha_transport
 
   write(3,*) n_rho_grid, '  n_rho_grid'
   write(3,*) 'i_tot_TAE=',i_tot_TAE !3.09.2016
+  write(3,*) 'l_D_interface=',l_D_interface
+  write(3,*) 'l_norm_const=',l_norm_const, '0 = local P_SD normalization (default), 1 = constant max(P_SD)'
 
   write(3,*) 'SDsink =',SDsink 
   write(3,*) 'delta0=',delta0
@@ -1305,6 +1328,26 @@ subroutine Alpha_transport
            -n_alpha_tran_rho(i-1)*T_alpha_equiv_rho(i-1))*0.16022/rmin/(rho_hat(i)-rho_hat(i-1))
 !end 11.22.16
 
+!  ---------------------------------------------------------------------
+!  Normalization profile for the stiff (critical-gradient) closure.
+!  Selected once per iteration and used by BOTH the point-based branch
+!  below and the interface branch further down, so the two stay
+!  consistent.
+!    l_norm_const = 0 -> local reference profile (original behaviour,
+!                        bit-for-bit unchanged)
+!    l_norm_const = 1 -> constant, equal to the maximum of that same
+!                        profile over the grid
+!  ---------------------------------------------------------------------
+   if (i_tot_TAE .eq. 0) then
+     p_norm_rho(:) = n_alpha_rho(:)
+   else if (i_tot_TAE .eq. 1) then
+     p_norm_rho(:) = p_alpha_tot_rho(:)
+   else
+     p_norm_rho(:) = p_alpha_rho(:)
+   endif
+
+   if (l_norm_const .eq. 1) p_norm_rho(:) = maxval(p_norm_rho(1:n_rho_grid))
+
 !compute D_alpha with updated stiff transport
   do i = 1,n_rho_grid
 
@@ -1337,15 +1380,15 @@ subroutine Alpha_transport
 
     if(i_tot_TAE .eq. 0) then
      if (rg_n_alpha_tran_rho(i) .gt. rg_n_alpha_th_rho(i)) D_alpha(i) = D_alpha(i) + &
-                   D_TAE*(rg_n_alpha_tran_rho(i)-rg_n_alpha_th_rho(i))*rmin/n_alpha_rho(i)
+                   D_TAE*(rg_n_alpha_tran_rho(i)-rg_n_alpha_th_rho(i))*rmin/p_norm_rho(i)
     endif
     if(i_tot_TAE .eq. 1) then
       if (rg_p_alpha_tot_tran_rho(i) .gt. rg_p_alpha_tot_th_rho(i)) D_alpha(i) = D_alpha(i) + &
-                   D_TAE*(rg_p_alpha_tot_tran_rho(i)-rg_p_alpha_tot_th_rho(i))*rmin/p_alpha_tot_rho(i)
+                   D_TAE*(rg_p_alpha_tot_tran_rho(i)-rg_p_alpha_tot_th_rho(i))*rmin/p_norm_rho(i)
     endif
     if(i_tot_TAE .eq. -1) then  !11.22.16
      if (rg_p_alpha_tran_rho(i) .gt. rg_p_alpha_th_rho(i)) D_alpha(i) = D_alpha(i) + &
-                   D_TAE*(rg_p_alpha_tran_rho(i)-rg_p_alpha_th_rho(i))*rmin/p_alpha_rho(i)
+                   D_TAE*(rg_p_alpha_tran_rho(i)-rg_p_alpha_th_rho(i))*rmin/p_norm_rho(i)
     endif
 
   enddo  ! radial grid
@@ -1384,20 +1427,20 @@ subroutine Alpha_transport
          gh      = (n_alpha_tran_rho(i)-n_alpha_tran_rho(i+1)) &
                     /rmin/(rho_hat(i+1)-rho_hat(i))
          gcrit_h = 0.5*(rg_n_alpha_th_rho(i)+rg_n_alpha_th_rho(i+1))
-         denom_h = 0.5*(n_alpha_rho(i)+n_alpha_rho(i+1))
+         denom_h = 0.5*(p_norm_rho(i)+p_norm_rho(i+1))
        else if (i_tot_TAE .eq. -1) then
          gh      = (n_alpha_tran_rho(i)*T_alpha_equiv_rho(i) &
                    -n_alpha_tran_rho(i+1)*T_alpha_equiv_rho(i+1)) &
                     *0.16022/rmin/(rho_hat(i+1)-rho_hat(i))
          gcrit_h = 0.5*(rg_p_alpha_th_rho(i)+rg_p_alpha_th_rho(i+1))
-         denom_h = 0.5*(p_alpha_rho(i)+p_alpha_rho(i+1))
+         denom_h = 0.5*(p_norm_rho(i)+p_norm_rho(i+1))
        else
 !        i_tot_TAE = 1 (joint alpha + NBI drive) is not reformulated on the
 !        interface grid; average the point-based quantities instead. This
 !        branch therefore retains the original behaviour.
          gh      = 0.5*(rg_p_alpha_tot_tran_rho(i)+rg_p_alpha_tot_tran_rho(i+1))
          gcrit_h = 0.5*(rg_p_alpha_tot_th_rho(i)+rg_p_alpha_tot_th_rho(i+1))
-         denom_h = 0.5*(p_alpha_tot_rho(i)+p_alpha_tot_rho(i+1))
+         denom_h = 0.5*(p_norm_rho(i)+p_norm_rho(i+1))
        endif
 
        if (gh .gt. gcrit_h) D_half(i) = D_half(i) &
