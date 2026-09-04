@@ -63,7 +63,7 @@ OBJECTS = Alpha_use_input.o \
 .SUFFIXES : .o .f90 .f .F
 
 all: $(LLIB).a $(EXEC)
-	rm ${GACODE_ROOT}/modules/alpha*.mod
+#	rm ${GACODE_ROOT}/modules/alpha*.mod
 
 $(EXEC): $(LLIB).a $(EXEC).o
 	$(FC) $(FFLAGS) -o $(EXEC) $(EXEC).o $(LLIB).a $(EXTRA_LIBS)

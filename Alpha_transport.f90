@@ -248,8 +248,8 @@ subroutine Alpha_transport
 !!  D_TAE = 0.0   !9.23.13
 !    D_TAE = 1.0   !10.02.13    D_TAE = 3.0
 !    D_TAE = 3.0
-!    D_TAE = 7.4 ! default from Eric
-    D_TAE = 100.0 ! JBL debug DTAE
+    D_TAE = 7.4 ! default from Eric
+!    D_TAE = 100.0 ! JBL debug DTAE
 !     D_TAE = 1.0
 !    D_TAE = 20.
 !    D_TAE = 10.
@@ -268,12 +268,14 @@ subroutine Alpha_transport
 !  n_up_loop = 300 !default
 !  n_up_loop = 1000
 !  n_up_loop = 5000
-  n_up_loop = 10000
+  n_up_loop = 10000 ! Eric default
+!  n_up_loop = 100000 ! JBL debug
 !  relax = 0.10
 !  relax = 0.05 !default
   relax = 0.0005
 !  relax = 0.001
-  relax_f = 0.005
+  relax_f = 0.005 ! Eric default
+!  relax_f = 0.0001 ! JBL debug
 
 !  l_D_interface = 1 : evaluate the stiff-transport closure on the interface
 !                      (half) grid, using the one-sided gradient that the
@@ -297,7 +299,7 @@ subroutine Alpha_transport
 !  NOTE this is a modelling change, not a bug fix. It rescales D over the
 !  whole profile (by p_norm_local/max), not only near the edge, so the core
 !  will also sit further from marginal. Compare against l_norm_const = 0.
-  l_norm_const = 0
+  l_norm_const = 1
 
   Q_fus = 10.  !default
 !!!  Q_fus = 20.  !for the 2x baseline case
