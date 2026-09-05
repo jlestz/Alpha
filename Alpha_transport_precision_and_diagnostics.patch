@@ -1,0 +1,346 @@
+--- /mnt/user-data/outputs/Alpha_transport_patched_v2.f90	2026-09-05 04:15:28.955415000 +0000
++++ Alpha_transport.f90	2026-09-05 04:41:45.918263867 +0000
+@@ -19,6 +19,24 @@
+   !--------------------------------------
+   implicit none
+ 
++!  JBL: explicit double-precision kind. Previously every real in this file
++!  was declared plain "real" under implicit none, so whether the code ran
++!  in single or double precision depended entirely on invisible compiler
++!  flags (-r8, -fdefault-real-8, etc.) at build time -- with no error or
++!  warning if that assumption was wrong. Declaring real(dp) everywhere
++!  fixes double precision in the source itself, independent of build
++!  flags. selected_real_kind(15,307) requests >=15 significant decimal
++!  digits and exponents up to >=1E307, which on essentially every modern
++!  compiler resolves to IEEE double precision (the same precision the
++!  prior -r8-style build was relying on, based on the observed ~1E-13 to
++!  1E-14 convergence floor).
++!  NOTE: numeric literals (e.g. 0.16022) are still single-precision
++!  constants unless suffixed "_dp"; promoting them is a separate, larger
++!  cleanup and is not done here, so a few ULPs of literal-rounding error
++!  remain -- negligible next to the 1E-12 convergence tolerance, but
++!  worth doing eventually for full consistency.
++     integer, parameter :: dp = selected_real_kind(15,307)
++
+      integer :: i_tot_TAE   !3.09.16
+ 
+      integer :: i
+@@ -31,11 +49,11 @@
+ !2A 
+      integer :: n_thdip2
+      integer :: i_bkg_Angioni
+-     real :: Angi_Pinch_fac
+-     real :: Angi_exp
++     real(dp) :: Angi_Pinch_fac
++     real(dp) :: Angi_exp
+      integer :: Angi_negative
+ 
+-     real :: beta_peaker
++     real(dp) :: beta_peaker
+ 
+      integer :: i_He_tran
+ 
+@@ -43,60 +61,60 @@
+ !2A  
+      integer :: i_threshold2
+ 
+-     real :: pi
+-     real :: delta0
+-     real :: rdelta0
+-     real :: delta1
+-     real :: D_bkg
+-     real :: D_TAE
+-     real :: dr
+-     real, dimension(n_rho_grid) :: dr_rho
+-     real :: lag_rhs
+-     real :: exp_rhs
+-     real :: imp_rhs
+-     real :: SDsink
+-     real :: error
+-     real :: error_f
+-     real :: error_check
+-     real :: error_rho_max
++     real(dp) :: pi
++     real(dp) :: delta0
++     real(dp) :: rdelta0
++     real(dp) :: delta1
++     real(dp) :: D_bkg
++     real(dp) :: D_TAE
++     real(dp) :: dr
++     real(dp), dimension(n_rho_grid) :: dr_rho
++     real(dp) :: lag_rhs
++     real(dp) :: exp_rhs
++     real(dp) :: imp_rhs
++     real(dp) :: SDsink
++     real(dp) :: error
++     real(dp) :: error_f
++     real(dp) :: error_check
++     real(dp) :: error_rho_max
+ !  JBL: early-exit tolerance for the main and He convergence loops. Chosen
+ !  just above the observed machine-precision noise floor (error_check ~
+ !  1E-13 to 1E-14 in converged runs) -- confirm this build is actually
+ !  compiled in double precision (e.g. via -r8/-fdefault-real-8), since
+ !  every real in this file is declared plain "real" under implicit none;
+ !  in single precision this tolerance would never be reached.
+-     real, parameter :: error_tol = 1.0E-12
+-     real :: relax
+-     real :: relax_f
+-     real :: thfrac
+-     real :: thdip
++     real(dp), parameter :: error_tol = 1.0E-12_dp
++     real(dp) :: relax
++     real(dp) :: relax_f
++     real(dp) :: thfrac
++     real(dp) :: thdip
+ !2A
+-     real :: error2
+-     real :: thfrac2 
+-     real :: thdip2
++     real(dp) :: error2
++     real(dp) :: thfrac2 
++     real(dp) :: thdip2
+ 
+-     real :: Q_fus
++     real(dp) :: Q_fus
+ 
+-     real :: sd_renorm
++     real(dp) :: sd_renorm
+ 
+-     real :: pinch_check
++     real(dp) :: pinch_check
+      
+-     real, dimension(n_rho_grid) :: rho_hat_p
+-     real, dimension(n_rho_grid) :: V_prime_rho
+-     real, dimension(n_rho_grid) :: rg_n_alpha_rho
+-     real, dimension(n_rho_grid) :: n_alpha_tran_rho
+-     real, dimension(n_rho_grid) :: n_alpha_tran_0_rho
+-     real, dimension(n_rho_grid) :: n_alpha_tran_p_rho
+-     real, dimension(n_rho_grid,100) :: n_alpha_tran_accum_rho
+-     real, dimension(n_rho_grid) :: D_alpha
+-     real, dimension(n_rho_grid) :: D_alpha_p
++     real(dp), dimension(n_rho_grid) :: rho_hat_p
++     real(dp), dimension(n_rho_grid) :: V_prime_rho
++     real(dp), dimension(n_rho_grid) :: rg_n_alpha_rho
++     real(dp), dimension(n_rho_grid) :: n_alpha_tran_rho
++     real(dp), dimension(n_rho_grid) :: n_alpha_tran_0_rho
++     real(dp), dimension(n_rho_grid) :: n_alpha_tran_p_rho
++     real(dp), dimension(n_rho_grid,100) :: n_alpha_tran_accum_rho
++     real(dp), dimension(n_rho_grid) :: D_alpha
++     real(dp), dimension(n_rho_grid) :: D_alpha_p
+ !  interface (half-grid) diffusivity: D_half(i) lives between grid
+ !  points i and i+1, and is the quantity the density recursion uses.
+-     real, dimension(n_rho_grid) :: D_half
+-     real, dimension(n_rho_grid) :: D_half_p
+-     real :: gh
+-     real :: gcrit_h
+-     real :: denom_h
++     real(dp), dimension(n_rho_grid) :: D_half
++     real(dp), dimension(n_rho_grid) :: D_half_p
++     real(dp) :: gh
++     real(dp) :: gcrit_h
++     real(dp) :: denom_h
+      integer :: l_D_interface
+      integer :: l_norm_const
+ !  l_debug_plots = 1 : write the periodic (every-100-iteration) D_alpha
+@@ -107,87 +125,87 @@
+      integer :: l_debug_plots
+ !  normalization profile actually used by the stiff closure;
+ !  either the local reference profile or a constant (see l_norm_const)
+-     real, dimension(n_rho_grid) :: p_norm_rho
+-     real, dimension(n_rho_grid) :: rg_n_alpha_th_rho
+-     real, dimension(n_rho_grid) :: rg_n_alpha_tran_rho
+-     real, dimension(n_rho_grid) :: rg_n_alpha_tran_p_rho
+-     real, dimension(n_rho_grid) :: flux_rho
+-     real, dimension(n_rho_grid) :: flux_rho_1_final
+-     real, dimension(n_rho_grid) :: flux_p_rho
+-     real, dimension(n_rho_grid) :: flux_0_rho
+-     real, dimension(n_rho_grid) :: error_rho
+-     real, dimension(n_rho_grid) :: error_f_rho
+-     real, dimension(n_rho_grid) :: flux_source_rho
+-     real, dimension(n_rho_grid) :: renormed_flux_source_rho
+-     real, dimension(n_rho_grid) :: chi_eff
+-     real, dimension(n_rho_grid) :: D_bkg_Angioni
+-     real, dimension(n_rho_grid) :: C_p_alpha
+-
+-     real, dimension(n_rho_grid) :: p_alpha_rho
+-     real, dimension(n_rho_grid) :: p_alpha_tran_rho
+-     real, dimension(n_rho_grid) :: rg_p_alpha_rho
+-     real, dimension(n_rho_grid) :: rg_p_alpha_th_rho
+-     real, dimension(n_rho_grid) :: rg_p_alpha_tran_rho
+-     real, dimension(n_rho_grid) :: rg_p_alpha_fac_rho
++     real(dp), dimension(n_rho_grid) :: p_norm_rho
++     real(dp), dimension(n_rho_grid) :: rg_n_alpha_th_rho
++     real(dp), dimension(n_rho_grid) :: rg_n_alpha_tran_rho
++     real(dp), dimension(n_rho_grid) :: rg_n_alpha_tran_p_rho
++     real(dp), dimension(n_rho_grid) :: flux_rho
++     real(dp), dimension(n_rho_grid) :: flux_rho_1_final
++     real(dp), dimension(n_rho_grid) :: flux_p_rho
++     real(dp), dimension(n_rho_grid) :: flux_0_rho
++     real(dp), dimension(n_rho_grid) :: error_rho
++     real(dp), dimension(n_rho_grid) :: error_f_rho
++     real(dp), dimension(n_rho_grid) :: flux_source_rho
++     real(dp), dimension(n_rho_grid) :: renormed_flux_source_rho
++     real(dp), dimension(n_rho_grid) :: chi_eff
++     real(dp), dimension(n_rho_grid) :: D_bkg_Angioni
++     real(dp), dimension(n_rho_grid) :: C_p_alpha
++
++     real(dp), dimension(n_rho_grid) :: p_alpha_rho
++     real(dp), dimension(n_rho_grid) :: p_alpha_tran_rho
++     real(dp), dimension(n_rho_grid) :: rg_p_alpha_rho
++     real(dp), dimension(n_rho_grid) :: rg_p_alpha_th_rho
++     real(dp), dimension(n_rho_grid) :: rg_p_alpha_tran_rho
++     real(dp), dimension(n_rho_grid) :: rg_p_alpha_fac_rho
+ 
+ !2A
+-     real, dimension(n_rho_grid) :: rg_n_alpha2_rho
+-     real, dimension(n_rho_grid) :: n_alpha2_tran_rho
+-     real, dimension(n_rho_grid) :: n_alpha2_tran_p_rho
+-     real, dimension(n_rho_grid) :: D_alpha2
+-     real, dimension(n_rho_grid) :: rg_n_alpha2_th_rho
+-     real, dimension(n_rho_grid) :: rg_n_alpha2_tran_rho
+-     real, dimension(n_rho_grid) :: rg_n_alpha2_tran_p_rho
+-     real, dimension(n_rho_grid) :: flux2_rho
+-     real, dimension(n_rho_grid) :: error2_rho
+-     real, dimension(n_rho_grid) :: flux2_source_rho
+-     real, dimension(n_rho_grid) :: renormed_flux2_source_rho
+-     real, dimension(n_rho_grid) :: D_bkg_Angioni2
+-     real, dimension(n_rho_grid) :: C_p_alpha2
+-
+-     real, dimension(n_rho_grid) :: p_alpha2_rho
+-     real, dimension(n_rho_grid) :: p_alpha2_tran_rho
+-     real, dimension(n_rho_grid) :: rg_p_alpha2_rho
+-     real, dimension(n_rho_grid) :: rg_p_alpha2_th_rho
+-     real, dimension(n_rho_grid) :: rg_p_alpha2_tran_rho
+-     real, dimension(n_rho_grid) :: rg_p_alpha2_fac_rho
+-
+-     real, dimension(n_rho_grid) :: p_alpha_tot_rho
+-     real, dimension(n_rho_grid) :: p_alpha_tot_tran_rho
+-     real, dimension(n_rho_grid) :: rg_p_alpha_tot_rho
+-     real, dimension(n_rho_grid) :: rg_p_alpha_tot_th_rho
+-     real, dimension(n_rho_grid) :: rg_p_alpha_tot_tran_rho
++     real(dp), dimension(n_rho_grid) :: rg_n_alpha2_rho
++     real(dp), dimension(n_rho_grid) :: n_alpha2_tran_rho
++     real(dp), dimension(n_rho_grid) :: n_alpha2_tran_p_rho
++     real(dp), dimension(n_rho_grid) :: D_alpha2
++     real(dp), dimension(n_rho_grid) :: rg_n_alpha2_th_rho
++     real(dp), dimension(n_rho_grid) :: rg_n_alpha2_tran_rho
++     real(dp), dimension(n_rho_grid) :: rg_n_alpha2_tran_p_rho
++     real(dp), dimension(n_rho_grid) :: flux2_rho
++     real(dp), dimension(n_rho_grid) :: error2_rho
++     real(dp), dimension(n_rho_grid) :: flux2_source_rho
++     real(dp), dimension(n_rho_grid) :: renormed_flux2_source_rho
++     real(dp), dimension(n_rho_grid) :: D_bkg_Angioni2
++     real(dp), dimension(n_rho_grid) :: C_p_alpha2
++
++     real(dp), dimension(n_rho_grid) :: p_alpha2_rho
++     real(dp), dimension(n_rho_grid) :: p_alpha2_tran_rho
++     real(dp), dimension(n_rho_grid) :: rg_p_alpha2_rho
++     real(dp), dimension(n_rho_grid) :: rg_p_alpha2_th_rho
++     real(dp), dimension(n_rho_grid) :: rg_p_alpha2_tran_rho
++     real(dp), dimension(n_rho_grid) :: rg_p_alpha2_fac_rho
++
++     real(dp), dimension(n_rho_grid) :: p_alpha_tot_rho
++     real(dp), dimension(n_rho_grid) :: p_alpha_tot_tran_rho
++     real(dp), dimension(n_rho_grid) :: rg_p_alpha_tot_rho
++     real(dp), dimension(n_rho_grid) :: rg_p_alpha_tot_th_rho
++     real(dp), dimension(n_rho_grid) :: rg_p_alpha_tot_tran_rho
+ 
+-     real, dimension(n_rho_grid) :: flow_factor
+-     real, dimension(n_rho_grid) :: power_factor
++     real(dp), dimension(n_rho_grid) :: flow_factor
++     real(dp), dimension(n_rho_grid) :: power_factor
+      !2A
+ 
+ !8.22.13 add He ash transport
+-     real, dimension(n_rho_grid) :: D_bkg_Angioni_He
+-     real, dimension(n_rho_grid) :: C_p_He
+-     real, dimension(n_rho_grid) :: n_He_tran_rho
+-     real, dimension(n_rho_grid) :: n_He_tran_p_rho
+-     real, dimension(n_rho_grid) :: rg_n_He_tran_rho
+-     real, dimension(n_rho_grid) :: rg_n_He_tran_p_rho
+-     real, dimension(n_rho_grid) :: D_He
++     real(dp), dimension(n_rho_grid) :: D_bkg_Angioni_He
++     real(dp), dimension(n_rho_grid) :: C_p_He
++     real(dp), dimension(n_rho_grid) :: n_He_tran_rho
++     real(dp), dimension(n_rho_grid) :: n_He_tran_p_rho
++     real(dp), dimension(n_rho_grid) :: rg_n_He_tran_rho
++     real(dp), dimension(n_rho_grid) :: rg_n_He_tran_p_rho
++     real(dp), dimension(n_rho_grid) :: D_He
+ 
+-     real, dimension(n_rho_grid) :: S_peaker
++     real(dp), dimension(n_rho_grid) :: S_peaker
+      
+-     real, dimension(n_rho_grid) :: net_of_sink
+-     real, dimension(n_rho_grid) :: net_of_sink2
++     real(dp), dimension(n_rho_grid) :: net_of_sink
++     real(dp), dimension(n_rho_grid) :: net_of_sink2
+ 
+-     real, dimension(n_rho_grid) :: D_bkg_read
+-     real, dimension(n_rho_grid) :: QL_ratio_bkg_read
++     real(dp), dimension(n_rho_grid) :: D_bkg_read
++     real(dp), dimension(n_rho_grid) :: QL_ratio_bkg_read
+ 
+-     real, dimension(n_rho_grid) :: d2pdr2_crit_f
+-     real, dimension(n_rho_grid) :: d2pdr2_crit_b
+-     real, dimension(n_rho_grid) :: x_smooth_check
++     real(dp), dimension(n_rho_grid) :: d2pdr2_crit_f
++     real(dp), dimension(n_rho_grid) :: d2pdr2_crit_b
++     real(dp), dimension(n_rho_grid) :: x_smooth_check
+ 
+      logical :: l_pinch_update
+      logical :: l_read_D_bkg
+ 
+      integer :: adapt_D_TAE_flag
+-     real :: x_switch
++     real(dp) :: x_switch
+      integer :: nr
+ 
+      integer :: l_crit_smooth
+@@ -1738,6 +1756,21 @@
+ 
+   enddo !ii loop
+ 
++!  JBL: warn if the loop was exhausted without converging, so a
++!  non-converged run doesn't look identical to a converged one in the
++!  output. On normal completion (no "exit" taken) ii = n_up_loop+1; if
++!  "exit" was taken above, ii holds the converged iteration number and
++!  is <= n_up_loop, so this check only fires in the non-converged case.
++  if (ii .gt. n_up_loop) then
++    if (NBI_flag .eq. 2) then
++      write(3,*) 'WARNING: main loop did not converge in',n_up_loop, &
++                 'iterations; error_check=',error_check,' error2=',error2
++    else
++      write(3,*) 'WARNING: main loop did not converge in',n_up_loop, &
++                 'iterations; error_check=',error_check
++    endif
++  endif
++
+ 
+   endif !i_dn_up=0
+ 
+@@ -2158,6 +2191,13 @@
+ 
+   enddo !ii loop  He
+ 
++!  JBL: warn if the He loop was exhausted without converging (see the
++!  matching check after the main loop above for the ii logic).
++  if (ii .gt. n_up_loop) then
++    write(3,*) 'WARNING: He loop did not converge in',n_up_loop, &
++               'iterations; error=',error
++  endif
++
+ 
+   endif !i_dn_up=0
+ 
+@@ -2335,6 +2375,11 @@
+     enddo
+     write(3,*) error_check, '  : relative error in solution'
+     close(3)
++!  JBL: explicit close for the unit opened conditionally near the top of
++!  the subroutine (Alpha_convergence_trace.out) -- previously left open
++!  for the compiler/runtime to close on exit; harmless in practice but
++!  tidier now that the open itself is conditional.
++    close(12)
+   endif
+ 
+   if (l_read_exp_profile .eq. 1) then
