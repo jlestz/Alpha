@@ -99,6 +99,12 @@ subroutine Alpha_transport
      real :: denom_h
      integer :: l_D_interface
      integer :: l_norm_const
+!  l_debug_plots = 1 : write the periodic (every-100-iteration) D_alpha
+!                      diagnostic dump to unit 12 and the D_half.out
+!                      interface-diffusivity file. Off (0) by default --
+!                      these are diagnostic-only and not needed for a
+!                      normal production run.
+     integer :: l_debug_plots
 !  normalization profile actually used by the stiff closure;
 !  either the local reference profile or a constant (see l_norm_const)
      real, dimension(n_rho_grid) :: p_norm_rho
@@ -307,6 +313,10 @@ subroutine Alpha_transport
 !  whole profile (by p_norm_local/max), not only near the edge, so the core
 !  will also sit further from marginal. Compare against l_norm_const = 0.
   l_norm_const = 1
+
+!  l_debug_plots = 0 : skip the every-100-iteration D_alpha dump (unit 12)
+!                      and D_half.out. Set to 1 to write both for debugging.
+  l_debug_plots = 0
 
   Q_fus = 10.  !default
 !!!  Q_fus = 20.  !for the 2x baseline case
@@ -620,7 +630,7 @@ subroutine Alpha_transport
 
   open(unit=3,file='Alpha_transport.out',status='replace')
 ! JBL 08/31/26 debug
-  open(unit=12,file='Alpha_convergence_trace.out',status='replace')
+  if (l_debug_plots .eq. 1) open(unit=12,file='Alpha_convergence_trace.out',status='replace')
 
 !SPECIAL DEBUG PRINT
 !    write(3,*) 'START SPECIAL DEBUG PRINT'
@@ -1539,7 +1549,7 @@ subroutine Alpha_transport
    write(3,*) 'ii=',ii,'D_TAE=',D_TAE,'error=',error,error_f,error_f_rho(25)
 
 ! JBL 08/31/26 debug 
-   if (mod(ii,100) .eq. 0) then
+   if ((l_debug_plots .eq. 1) .and. (mod(ii,100) .eq. 0)) then
      write(12,*) 'ii=', ii
      do i=1,n_rho_grid
        write(12,*) rho_hat(i), D_alpha(i), error_f_rho(i)
@@ -2314,15 +2324,18 @@ subroutine Alpha_transport
 !  itself establish that D_half is smooth. Decompose this file instead.
 !  Written for both schemes: with l_D_interface = 0 the entries are the
 !  averaged point values, which is still exactly what the solve uses.
+!  Diagnostic only -- gated by l_debug_plots.
 !  ---------------------------------------------------------------------
-  open(unit=3,file='D_half.out',status='replace')
-  write(3,*) 'Interface diffusivity D_half for EP species 1 in m^2/s'
-  write(3,*) 'columns: rho_half  D_half   with l_D_interface=', l_D_interface
-  do i = 1,n_rho_grid-1
-   write(3,*) 0.5*(rho_hat(i)+rho_hat(i+1)), D_half(i)
-  enddo
-  write(3,*) error_check, '  : relative error in solution'
-  close(3)
+  if (l_debug_plots .eq. 1) then
+    open(unit=3,file='D_half.out',status='replace')
+    write(3,*) 'Interface diffusivity D_half for EP species 1 in m^2/s'
+    write(3,*) 'columns: rho_half  D_half   with l_D_interface=', l_D_interface
+    do i = 1,n_rho_grid-1
+     write(3,*) 0.5*(rho_hat(i)+rho_hat(i+1)), D_half(i)
+    enddo
+    write(3,*) error_check, '  : relative error in solution'
+    close(3)
+  endif
 
   if (l_read_exp_profile .eq. 1) then
     flow_factor(2:n_rho_grid) = (flux_source_rho(2:n_rho_grid)-flux_rho_1_final(2:n_rho_grid))/flux_source_rho(2:n_rho_grid)
