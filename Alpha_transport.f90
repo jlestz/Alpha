@@ -59,6 +59,13 @@ subroutine Alpha_transport
      real :: error_f
      real :: error_check
      real :: error_rho_max
+!  JBL: early-exit tolerance for the main and He convergence loops. Chosen
+!  just above the observed machine-precision noise floor (error_check ~
+!  1E-13 to 1E-14 in converged runs) -- confirm this build is actually
+!  compiled in double precision (e.g. via -r8/-fdefault-real-8), since
+!  every real in this file is declared plain "real" under implicit none;
+!  in single precision this tolerance would never be reached.
+     real, parameter :: error_tol = 1.0E-12
      real :: relax
      real :: relax_f
      real :: thfrac
@@ -1700,6 +1707,25 @@ subroutine Alpha_transport
 
 !  end alpha2  transport
 
+!  JBL: early-exit on convergence. Checked here, after every relax step
+!  for both species has already run for this iteration (not right after
+!  error_check/error2 are computed), so a converged exit leaves behind
+!  exactly the same fully-relaxed, correctly-gridded state that a normal
+!  completed iteration would -- nothing is skipped. For NBI_flag .ne. 2
+!  there is no second species this iteration, so only error_check gates
+!  the exit.
+   if (NBI_flag .eq. 2) then
+     if ((error_check .lt. error_tol) .and. (error2 .lt. error_tol)) then
+       write(3,*) 'Converged at ii=',ii,' error_check=',error_check,' error2=',error2
+       exit
+     endif
+   else
+     if (error_check .lt. error_tol) then
+       write(3,*) 'Converged at ii=',ii,' error_check=',error_check
+       exit
+     endif
+   endif
+
   enddo !ii loop
 
 
@@ -2112,6 +2138,13 @@ subroutine Alpha_transport
     n_He_tran_rho(i) = relax*n_He_tran_rho(i)+(1.-relax)*n_He_tran_p_rho(i)
    enddo
 
+!  JBL: early-exit on convergence, independent of the main-loop check
+!  above. Placed after the relax step so the exit leaves the same
+!  fully-relaxed state a normal completed iteration would.
+   if (error .lt. error_tol) then
+     write(3,*) 'He loop converged at ii=',ii,' error=',error
+     exit
+   endif
 
   enddo !ii loop  He
 
