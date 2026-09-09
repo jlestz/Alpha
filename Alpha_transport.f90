@@ -96,6 +96,33 @@ subroutine Alpha_transport
 !  converges off the n_print_stride grid still ends with a normal
 !  data point, not just the summary line.
      integer, parameter :: n_print_stride = 100
+!  JBL: plateau-based convergence detection. Because n_alpha_tran_rho
+!  is updated with heavy under-relaxation (relax, relax_f << 1), the
+!  reported error_check/error2/error understate the true remaining
+!  distance to the converged profile by roughly a factor of
+!  relax*(1-lambda) (lambda = contraction rate of the underlying
+!  unrelaxed update) -- so a single fixed absolute error_tol means a
+!  wildly different true accuracy depending on relax/relax_f, and for
+!  some (D_TAE,relax,relax_f) combinations the error can plateau at a
+!  noise floor well above error_tol and never cross it at all (seen
+!  at relax_f=1E-3: error_check/error_f both flatten around 1E-10 to
+!  1E-11 by ii~2E5 and stay there out to 1E6 iterations). Detecting
+!  that the error has stopped decreasing -- averaged over a window,
+!  not compared iteration-to-iteration, since error_check/error2/error
+!  are themselves noisy from iteration to iteration -- is robust to
+!  all of that: it doesn't care what floor the run stalls at, only
+!  whether it has stopped moving. This becomes the primary exit
+!  condition; the absolute error_tol above is kept as an alternate
+!  exit condition for runs that genuinely do decay below it (e.g.
+!  d740, relax_f=1E-5) so they still exit as soon as they cross it
+!  rather than waiting a full plateau window unnecessarily.
+     integer, parameter :: n_plateau_window = 10000
+     real(dp), parameter :: plateau_ratio_tol = 0.9_dp
+     real(dp) :: error_window_sum, error_window_prev_avg, error_window_avg
+     real(dp) :: error2_window_sum, error2_window_prev_avg, error2_window_avg
+     real(dp) :: error_he_window_sum, error_he_window_prev_avg, error_he_window_avg
+     integer :: n_window_count, n_window_count_he
+     logical :: l_plateau, l_plateau2, l_plateau_he
      real(dp) :: relax
      real(dp) :: relax_f
      real(dp) :: thfrac
@@ -1326,6 +1353,16 @@ subroutine Alpha_transport
     D_half(:) = D_bkg
     D_half_p(:) = D_bkg
 
+!  JBL: initialize the plateau-detection accumulators (see the
+!  declaration comment above) before the main iteration loop starts.
+!  error_window_prev_avg < 0 is a sentinel meaning "no completed
+!  window yet", so the first window can never trigger a plateau exit.
+    error_window_sum = 0.0_dp
+    error2_window_sum = 0.0_dp
+    n_window_count = 0
+    error_window_prev_avg = -1.0_dp
+    error2_window_prev_avg = -1.0_dp
+
     do ii=1,n_up_loop  !start iteration loop
 
     flux_p_rho(:) = flux_rho(:)
@@ -1574,6 +1611,16 @@ subroutine Alpha_transport
    error=sqrt(error/float(n_rho_grid-2))
    error_f=sqrt(error_f/float(n_rho_grid-2))
    error_check = error
+
+!  JBL: accumulate error_check into the current plateau window (see
+!  the declaration comment for why this is averaged over a window
+!  rather than compared point-to-point). n_window_count is
+!  incremented once per main-loop iteration here; the error2
+!  accumulation below (alpha2 transport branch) piggybacks on this
+!  same counter rather than keeping a separate one, so the two stay
+!  aligned to the same window when NBI_flag=2.
+   error_window_sum = error_window_sum + error_check
+   n_window_count = n_window_count + 1
  
   
  
@@ -1740,6 +1787,9 @@ subroutine Alpha_transport
    enddo
    error2=sqrt(error2/float(n_rho_grid-1))
 
+!  JBL: accumulate error2 into the same plateau window as error_check
+!  above (n_window_count is already incremented there for this ii).
+   error2_window_sum = error2_window_sum + error2
 
 
 !  JBL: throttle to every n_print_stride iterations, always keeping
@@ -1757,31 +1807,76 @@ subroutine Alpha_transport
 
 !  end alpha2  transport
 
-!  JBL: early-exit on convergence. Checked here, after every relax step
-!  for both species has already run for this iteration (not right after
-!  error_check/error2 are computed), so a converged exit leaves behind
-!  exactly the same fully-relaxed, correctly-gridded state that a normal
-!  completed iteration would -- nothing is skipped. For NBI_flag .ne. 2
-!  there is no second species this iteration, so only error_check gates
-!  the exit.
+!  JBL: evaluate the plateau window every n_plateau_window iterations,
+!  comparing this window's mean error_check (and, for NBI_flag=2,
+!  mean error2) against the previous window's mean. A ratio close to
+!  1 means the error has stopped decreasing (plateaued); a small
+!  ratio means it's still decaying steadily. Averaged over the window
+!  rather than point-sampled since error_check/error2 are noisy from
+!  iteration to iteration (see the declaration comment). The first
+!  window can never trigger a plateau (prev_avg starts at the -1
+!  sentinel), so this needs at least two full windows of iterations
+!  before it can fire.
+   l_plateau = .false.
+   if (n_window_count .eq. n_plateau_window) then
+     error_window_avg = error_window_sum/float(n_plateau_window)
+     if (NBI_flag .eq. 2) error2_window_avg = error2_window_sum/float(n_plateau_window)
+
+     if (error_window_prev_avg .gt. 0.0_dp) then
+       l_plateau = (error_window_avg/error_window_prev_avg .gt. plateau_ratio_tol)
+     endif
+     if (NBI_flag .eq. 2) then
+       l_plateau2 = .false.
+       if (error2_window_prev_avg .gt. 0.0_dp) then
+         l_plateau2 = (error2_window_avg/error2_window_prev_avg .gt. plateau_ratio_tol)
+       endif
+       l_plateau = l_plateau .and. l_plateau2
+     endif
+
+     error_window_prev_avg = error_window_avg
+     if (NBI_flag .eq. 2) error2_window_prev_avg = error2_window_avg
+     error_window_sum = 0.0_dp
+     error2_window_sum = 0.0_dp
+     n_window_count = 0
+   endif
+
+!  JBL: exit on either condition -- a detected plateau (primary) or
+!  the absolute error_tol (alternate, kept so a run that genuinely
+!  decays all the way down, e.g. relax_f=1E-5, still exits as soon as
+!  it crosses the tolerance rather than waiting a full extra plateau
+!  window). Checked here, after every relax step for both species has
+!  already run for this iteration (not right after error_check/error2
+!  are computed), so an exit leaves behind exactly the same
+!  fully-relaxed, correctly-gridded state that a normal completed
+!  iteration would -- nothing is skipped. For NBI_flag .ne. 2 there is
+!  no second species this iteration, so only error_check/its plateau
+!  gate the exit.
    if (NBI_flag .eq. 2) then
-     if ((error_check .lt. error_tol) .and. (error2 .lt. error_tol)) then
-!  JBL: also emit the regular per-iteration diagnostic lines on a
-!  converged exit, in the same format/columns as the throttled writes
-!  above, so the log always has a final regular-format data point
-!  even when convergence lands off the n_print_stride grid. The
-!  separate "Converged at ii=..." summary line below is kept as well.
+     if (((error_check .lt. error_tol) .and. (error2 .lt. error_tol)) .or. l_plateau) then
+!  JBL: also emit the regular per-iteration diagnostic lines on exit,
+!  in the same format/columns as the throttled writes above, so the
+!  log always has a final regular-format data point even when the
+!  exit lands off the n_print_stride grid. The separate summary line
+!  below is kept as well.
        write(3,*) 'ii=',ii,'D_TAE=',D_TAE,'error=',error,error_f,error_f_rho(25)
        write(3,*) 'ii=',ii,'error2=',error2,error2_rho(1),error2_rho(25)
-       write(3,*) 'Converged at ii=',ii,' error_check=',error_check,' error2=',error2
+       if ((error_check .lt. error_tol) .and. (error2 .lt. error_tol)) then
+         write(3,*) 'Converged at ii=',ii,' error_check=',error_check,' error2=',error2
+       else
+         write(3,*) 'Plateaued at ii=',ii,' error_check=',error_check,' error2=',error2
+       endif
        exit
      endif
    else
-     if (error_check .lt. error_tol) then
-!  JBL: same as above -- emit the regular-format diagnostic line on a
-!  converged exit, in addition to the summary "Converged at ii=..." line.
+     if ((error_check .lt. error_tol) .or. l_plateau) then
+!  JBL: same as above -- emit the regular-format diagnostic line on
+!  exit, in addition to the summary line.
        write(3,*) 'ii=',ii,'D_TAE=',D_TAE,'error=',error,error_f,error_f_rho(25)
-       write(3,*) 'Converged at ii=',ii,' error_check=',error_check
+       if (error_check .lt. error_tol) then
+         write(3,*) 'Converged at ii=',ii,' error_check=',error_check
+       else
+         write(3,*) 'Plateaued at ii=',ii,' error_check=',error_check
+       endif
        exit
      endif
    endif
@@ -2141,6 +2236,11 @@ subroutine Alpha_transport
 
     write(3,*) 'ii   error  error_rho(1)  error_rho(25)'
 
+!  JBL: initialize the He-loop plateau-detection accumulators (see
+!  the declaration comment above the main-loop initialization).
+    error_he_window_sum = 0.0_dp
+    n_window_count_he = 0
+    error_he_window_prev_avg = -1.0_dp
 
     do ii=1,n_up_loop  !He transport loop
 
@@ -2205,6 +2305,12 @@ subroutine Alpha_transport
    enddo
    error=sqrt(error/float(n_rho_grid-1))
 
+!  JBL: accumulate into the He-loop plateau window (see the
+!  declaration comment above the main-loop version for why this is
+!  averaged over a window rather than compared point-to-point).
+   error_he_window_sum = error_he_window_sum + error
+   n_window_count_he = n_window_count_he + 1
+
 
 
 !  JBL: throttle to every n_print_stride iterations, always keeping
@@ -2217,15 +2323,33 @@ subroutine Alpha_transport
     n_He_tran_rho(i) = relax*n_He_tran_rho(i)+(1.-relax)*n_He_tran_p_rho(i)
    enddo
 
-!  JBL: early-exit on convergence, independent of the main-loop check
-!  above. Placed after the relax step so the exit leaves the same
+!  JBL: evaluate the He-loop plateau window every n_plateau_window
+!  iterations, same pattern as the main loop above.
+   l_plateau_he = .false.
+   if (n_window_count_he .eq. n_plateau_window) then
+     error_he_window_avg = error_he_window_sum/float(n_plateau_window)
+     if (error_he_window_prev_avg .gt. 0.0_dp) then
+       l_plateau_he = (error_he_window_avg/error_he_window_prev_avg .gt. plateau_ratio_tol)
+     endif
+     error_he_window_prev_avg = error_he_window_avg
+     error_he_window_sum = 0.0_dp
+     n_window_count_he = 0
+   endif
+
+!  JBL: early exit on either a detected plateau (primary) or the
+!  absolute error_tol (alternate) -- see the main-loop comment above
+!  for the rationale. Independent of the main-loop check above.
+!  Placed after the relax step so the exit leaves the same
 !  fully-relaxed state a normal completed iteration would.
-   if (error .lt. error_tol) then
+   if ((error .lt. error_tol) .or. l_plateau_he) then
 !  JBL: same pattern as the main loop -- emit the regular-format
-!  diagnostic line on a converged exit, in addition to the summary
-!  "He loop converged at ii=..." line.
+!  diagnostic line on exit, in addition to the summary line.
      write(3,*) 'ii=',ii,'error=',error,error_rho(1),error_rho(25)
-     write(3,*) 'He loop converged at ii=',ii,' error=',error
+     if (error .lt. error_tol) then
+       write(3,*) 'He loop converged at ii=',ii,' error=',error
+     else
+       write(3,*) 'He loop plateaued at ii=',ii,' error=',error
+     endif
      exit
    endif
 
